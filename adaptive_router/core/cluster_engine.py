@@ -183,6 +183,21 @@ class ClusterEngine(BaseEstimator):
                 "or set components manually during restoration."
             )
 
+    def _normalize_features(
+        self, features: npt.NDArray[np.float64], norm: str = "l2"
+    ) -> npt.NDArray[np.float32]:
+        """Normalize features and convert to float32 for sklearn compatibility.
+
+        Args:
+            features: Feature array to normalize
+            norm: Normalization strategy ('l1', 'l2', or 'max')
+
+        Returns:
+            Normalized features as float32 array
+        """
+        features_normalized = normalize(features, norm=norm, copy=False)
+        return features_normalized.astype(np.float32, copy=False)
+
     @property
     def is_fitted(self) -> bool:
         """Check if the engine has been fitted."""
@@ -213,11 +228,9 @@ class ClusterEngine(BaseEstimator):
         # Extract semantic embedding features
         features = self.feature_extractor.fit_transform(inputs)
 
-        # Normalize using configured strategy
+        # Normalize and convert to float32
         norm_strategy = self.normalization_strategy or "l2"
-        features_normalized = normalize(features, norm=norm_strategy, copy=False)
-        # Convert to float32 for sklearn's Cython code
-        features_normalized = features_normalized.astype(np.float32, copy=False)
+        features_normalized = self._normalize_features(features, norm=norm_strategy)
 
         # Perform K-means clustering
         self.kmeans.fit(features_normalized)
@@ -265,11 +278,9 @@ class ClusterEngine(BaseEstimator):
         # Extract features
         features = self.feature_extractor.transform(inputs)
 
-        # Normalize using configured strategy
+        # Normalize and convert to float32
         norm_strategy = self.normalization_strategy or "l2"
-        features_normalized = normalize(features, norm=norm_strategy, copy=False)
-        # Convert to float32 for sklearn's Cython code
-        features_normalized = features_normalized.astype(np.float32, copy=False)
+        features_normalized = self._normalize_features(features, norm=norm_strategy)
 
         # Predict clusters
         return self.kmeans.predict(features_normalized).astype(np.int32)
@@ -299,10 +310,8 @@ class ClusterEngine(BaseEstimator):
         # Extract features
         features = self.feature_extractor.transform([text])
 
-        # Normalize
-        features_normalized = normalize(features, norm="l2", copy=False)
-        # Convert to float32 for sklearn's Cython code
-        features_normalized = features_normalized.astype(np.float32, copy=False)
+        # Normalize and convert to float32
+        features_normalized = self._normalize_features(features, norm="l2")
 
         # Predict cluster and compute distance
         cluster_id = int(self.kmeans.predict(features_normalized)[0])
