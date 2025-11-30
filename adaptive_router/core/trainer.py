@@ -413,7 +413,6 @@ class Trainer:
         training_time = time.time() - start_time
 
         # Get samples per cluster using vectorized bincount
-        cluster_assignments = cluster_engine.predict(inputs)
         samples_per_cluster = list(
             np.bincount(cluster_assignments, minlength=self.n_clusters)
         )
