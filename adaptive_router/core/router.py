@@ -336,7 +336,7 @@ class ModelRouter:
             Configured SentenceTransformer model
         """
 
-        device = "auto"
+        device = ClusterEngine.get_device()
         logger.info(f"Loading embedding model on device: {device}")
 
         # Suppress the clean_up_tokenization_spaces warning during model loading
