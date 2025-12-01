@@ -197,13 +197,13 @@ def create_app() -> FastAPI:
         overall_status = HealthStatus.HEALTHY
 
         if app_state.available_models:
-            registry_health = ServiceHealth(
+            models_health = ServiceHealth(
                 status=HealthStatus.HEALTHY,
                 message=f"{len(app_state.available_models)} models loaded from profile",
             )
         else:
             overall_status = HealthStatus.UNHEALTHY
-            registry_health = ServiceHealth(
+            models_health = ServiceHealth(
                 status=HealthStatus.UNHEALTHY,
                 message="Router profile not loaded",
             )
@@ -226,7 +226,7 @@ def create_app() -> FastAPI:
 
         return HealthCheckResponse(
             status=overall_status,
-            registry=registry_health,
+            models=models_health,
             router=router_health,
         )
 
@@ -381,6 +381,7 @@ image = (
         "methodtools>=0.4.7",
         "einops>=0.8.1",
     )
+    .env({"SENTENCE_TRANSFORMERS_HOME": "/vol/model_cache"})
     .add_local_dir("adaptive_router", remote_path="/root/adaptive_router")
     .add_local_dir("app", remote_path="/root/app")
     .add_local_file("main.py", remote_path="/root/main.py")
@@ -395,7 +396,7 @@ image = (
     scaledown_window=60,
     min_containers=0,
     volumes={
-        "/root/.cache": model_cache,
+        "/vol/model_cache": model_cache,
         "/data": profile_data,
     },
 )
