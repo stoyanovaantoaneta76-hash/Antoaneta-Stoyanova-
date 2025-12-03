@@ -363,6 +363,10 @@ model_cache = modal.Volume.from_name(
 profile_data = modal.Volume.from_name("adaptive-router-data", create_if_missing=True)
 
 # Custom image with dependencies
+# NOTE: Modal's uv_sync does NOT support UV workspaces, so we need to:
+# 1. Copy workspace root so uv_sync can access uv.lock
+# 2. Sync from workspace root (not a subdirectory)
+# 3. Add both packages as Python source for runtime
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .env(
@@ -370,8 +374,11 @@ image = (
             "SENTENCE_TRANSFORMERS_HOME": "/vol/model_cache",
         }
     )
-    .add_local_dir("../..", "/root/workspace", copy=True)  # Copy workspace root (includes both packages)
-    .uv_sync("adaptive_router_app", frozen=True)  # Sync app package (workspace dependency on adaptive_router is auto-resolved)
+    .add_local_dir("../..", "/root/workspace", copy=True)  # Copy workspace root (needed for uv.lock access)
+    .workdir("/root/workspace")  # Set working directory to workspace root
+    .uv_sync(".", frozen=True)  # Sync from workspace root (uv_sync doesn't support workspaces)
+    .add_local_python_source("adaptive_router")  # Add library package for runtime
+    .add_local_python_source("adaptive_router_app")  # Add app package for runtime
 )
 
 
