@@ -370,7 +370,7 @@ image = (
             "SENTENCE_TRANSFORMERS_HOME": "/vol/model_cache",
         }
     )
-    .copy_local_dir("../..", "/root/workspace")  # Copy workspace root (includes both packages)
+    .add_local_dir("../..", "/root/workspace", copy=True)  # Copy workspace root (includes both packages)
     .uv_sync("adaptive_router_app", frozen=True)  # Sync app package (workspace dependency on adaptive_router is auto-resolved)
 )
 
