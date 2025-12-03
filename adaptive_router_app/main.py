@@ -366,8 +366,8 @@ profile_data = modal.Volume.from_name("adaptive-router-data", create_if_missing=
 # NOTE: Modal's uv_sync does NOT support UV workspaces, so we:
 # 1. Add both packages as Python source first (so adaptive-router is available)
 # 2. Install library dependencies from adaptive_router/pyproject.toml
-# 3. Install app dependencies from adaptive_router_app/pyproject.toml
-#    (pip will skip the workspace dependency since adaptive-router is already available as source)
+# 3. Install app dependencies manually (excluding adaptive-router workspace dependency)
+#    since pip doesn't understand UV workspace syntax
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .env(
@@ -378,7 +378,11 @@ image = (
     .add_local_python_source("adaptive_router", copy=True)  # Add library package first (so it's available)
     .add_local_python_source("adaptive_router_app", copy=True)  # Add app package
     .pip_install_from_pyproject("../adaptive_router/pyproject.toml")  # Install library dependencies
-    .pip_install_from_pyproject("pyproject.toml")  # Install app dependencies
+    .pip_install(
+        "pydantic-settings>=2.0.0,<3",
+        "fastapi>=0.118.2",
+        "modal>=1.2.4",
+    )  # Install app dependencies (excluding adaptive-router, already available as source)
 )
 
 
