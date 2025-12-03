@@ -81,6 +81,12 @@ modal cancel adaptive-router
 - **Secrets**: Modal secrets from `adaptive-router-secrets` for configuration
 - **Image**: Custom Debian image with PyTorch CUDA 11.8, FastAPI, and dependencies
 
+**Modal Image Build Workflow:**
+- The deploy command **must** be run from the repository root so `../adaptive_router` resolves.
+- The image copies both `adaptive_router` (library) and `adaptive_router_app` (FastAPI app) into `/root`.
+- A single `pip_install_from_pyproject("/root/adaptive_router_app/pyproject.toml")` step installs the app plus the library through its path dependency?no manual `pip install -e .` or extra PyPI indexes required.
+- Environment variables (e.g., `SENTENCE_TRANSFORMERS_HOME`) remain available via `.env(...)`, while `PYTHONPATH` no longer needs the library path because it is installed into site-packages.
+
 **Modal Volumes:**
 - `adaptive-router-data`: Stores router profile JSON at `/data/profile.json`
 - `sentence-transformer-cache`: Caches HuggingFace models at `/vol/model_cache`

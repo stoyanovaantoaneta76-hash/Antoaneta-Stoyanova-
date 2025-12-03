@@ -364,31 +364,15 @@ profile_data = modal.Volume.from_name("adaptive-router-data", create_if_missing=
 
 # Custom image with dependencies
 image = (
-    modal.Image.debian_slim(python_version="3.11")
-    .pip_install(
-        "torch>=2.9.1,<3.0.0",
-        extra_index_url="https://download.pytorch.org/whl/cu118",
-    )
-    .pip_install(
-        "fastapi[standard]>=0.118.2",
-        "pydantic>=2.11.5,<3",
-        "pydantic-settings>=2.0.0,<3",
-        "sentence-transformers>=2.7.0,<3",
-        "numpy>=1.24.0,<2.0",
-        "scikit-learn>=1.7.2",
-        "polars>=1.35.2",
-        "boto3>=1.34.0,<2",
-        "datasets>=4.4.1",
-        "deepeval>=3.7.0",
-    )
+    modal.Image.debian_slim(python_version="3.12")
     .env(
         {
             "SENTENCE_TRANSFORMERS_HOME": "/vol/model_cache",
         }
     )
     .add_local_dir("../adaptive_router", remote_path="/root/adaptive_router")
-    .run_commands("cd /root/adaptive_router && pip install -e .")
     .add_local_dir(".", remote_path="/root/adaptive_router_app")
+    .pip_install_from_pyproject("/root/adaptive_router_app/pyproject.toml")
 )
 
 
