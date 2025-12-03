@@ -384,7 +384,6 @@ image = (
     .env(
         {
             "SENTENCE_TRANSFORMERS_HOME": "/vol/model_cache",
-            "PYTHONPATH": "/root/adaptive_router_app:/root/adaptive_router:${PYTHONPATH}",
         }
     )
     .add_local_dir("../adaptive_router", remote_path="/root/adaptive_router")
