@@ -370,11 +370,9 @@ image = (
             "SENTENCE_TRANSFORMERS_HOME": "/vol/model_cache",
         }
     )
-    .add_local_dir("../adaptive_router", remote_path="/root/adaptive_router", copy=True)
-    .add_local_dir(".", remote_path="/root/adaptive_router_app", copy=True)
-    .add_local_file("pyproject.toml", remote_path="/root/adaptive_router_app/pyproject.toml", copy=True)
-    .add_local_file("uv.lock", remote_path="/root/adaptive_router_app/uv.lock", copy=True)
-    .uv_sync("/root/adaptive_router_app", frozen=True)
+    .add_local_dir("adaptive_router", remote_path="/root/adaptive_router", copy=True)
+    .add_local_dir("adaptive_router_app", remote_path="/root/adaptive_router_app", copy=True)
+    .uv_sync(".", frozen=True)
 )
 
 
