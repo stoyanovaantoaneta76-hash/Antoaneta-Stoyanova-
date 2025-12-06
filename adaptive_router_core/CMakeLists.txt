@@ -325,11 +325,17 @@ endif()
 # clang-tidy target
 find_program(CLANG_TIDY NAMES clang-tidy-18 clang-tidy-17 clang-tidy)
 if(CLANG_TIDY AND EXISTS "${CMAKE_BINARY_DIR}/compile_commands.json")
+  file(GLOB_RECURSE _tidy_sources
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/bindings/**/*.cpp"
+  )
   add_custom_target(tidy
     COMMAND ${CLANG_TIDY} -p "${CMAKE_BINARY_DIR}" ${_tidy_sources}
     COMMENT "Running clang-tidy"
     VERBATIM
   )
+  unset(_tidy_sources)
 endif()
 
 # -----------------------------------------------------------------------------
