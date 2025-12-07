@@ -109,7 +109,6 @@ jobs:
         with:
           cuda: '12.6.2'
           method: 'network'
-          sub-packages: '["nvcc", "cudart", "cublas"]'
 
       - if: github.ref == matrix.branch
         name: Setup uv
