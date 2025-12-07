@@ -8,6 +8,7 @@ on:
       - 'adaptive_router/**'
       - 'pyproject.toml'
       - 'uv.lock'
+      - '.github/workflows/adaptive-app-ci.yml'
   pull_request:
     branches: [main]
     paths:
@@ -15,6 +16,7 @@ on:
       - 'adaptive_router/**'
       - 'pyproject.toml'
       - 'uv.lock'
+      - '.github/workflows/adaptive-app-ci.yml'
   workflow_dispatch:
 
 concurrency:
