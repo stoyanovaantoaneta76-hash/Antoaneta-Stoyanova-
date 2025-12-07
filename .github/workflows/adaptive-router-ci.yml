@@ -22,7 +22,7 @@ concurrency:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: adaptive_router
@@ -59,10 +59,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: linux, runner: ubuntu-24.04, python: "3.11" }
-          - { os: linux, runner: ubuntu-24.04, python: "3.12" }
-          - { os: linux, runner: ubuntu-24.04, python: "3.13" }
-          - { os: macos, runner: macos-15, python: "3.12" }
+          - { os: linux, runner: ubuntu-latest, python: "3.11" }
+          - { os: linux, runner: ubuntu-latest, python: "3.12" }
+          - { os: linux, runner: ubuntu-latest, python: "3.13" }
+          - { os: macos, runner: macos-latest, python: "3.11" }
+          - { os: macos, runner: macos-latest, python: "3.12" }
+          - { os: macos, runner: macos-latest, python: "3.13" }
+          - { os: windows, runner: windows-latest, python: "3.11" }
+          - { os: windows, runner: windows-latest, python: "3.12" }
+          - { os: windows, runner: windows-latest, python: "3.13" }
 
     steps:
       - uses: actions/checkout@v6

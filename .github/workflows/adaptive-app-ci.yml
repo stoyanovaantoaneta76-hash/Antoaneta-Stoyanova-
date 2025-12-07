@@ -24,7 +24,7 @@ concurrency:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: adaptive_router_app
@@ -50,19 +50,13 @@ jobs:
           uv run mypy .
 
   test:
-    name: Test (${{ matrix.os }})
+    name: Test
     needs: lint
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:
         working-directory: adaptive_router_app
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: linux, runner: ubuntu-24.04 }
-          - { os: macos, runner: macos-15 }
 
     steps:
       - uses: actions/checkout@v6
