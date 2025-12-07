@@ -29,7 +29,6 @@ from adaptive_router.models.api import (
 )
 from adaptive_router.models.storage import RouterProfile, MinIOSettings
 from adaptive_router.exceptions.core import (
-    ModelNotFoundError,
     InvalidModelFormatError,
 )
 from adaptive_core_ext import Router as CoreRouter
