@@ -23,7 +23,7 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
-  # Core library dependency (local editable path)
+  # Core library dependency with GPU support for production
   "adaptive-router",
   # Data Validation
   "pydantic-settings>=2.0.0,<3",
@@ -51,11 +51,11 @@ packages = ["adaptive_router_app"]
 [tool.mypy]
 plugins = ["pydantic.mypy"]
 exclude = [
-    "model_data/",
-    "adaptive_router/tests/",
-    "adaptive_router_app/tests/",
-    "scripts/models/",
-    "adaptive_router/",  # Library is a separate package with py.typed marker (PEP 561)
+  "model_data/",
+  "adaptive_router/tests/",
+  "adaptive_router_app/tests/",
+  "scripts/models/",
+  "adaptive_router/",           # Library is a separate package with py.typed marker (PEP 561)
 ]
 no_implicit_optional = true
 warn_return_any = false

@@ -343,7 +343,13 @@ endif()
 # -----------------------------------------------------------------------------
 include(CMakePackageConfigHelpers)
 
-install(TARGETS adaptive_core adaptive_c
+# Build list of targets to install
+set(_install_targets adaptive_core adaptive_c)
+if(ADAPTIVE_ENABLE_CUDA)
+  list(APPEND _install_targets adaptive_core_cuda)
+endif()
+
+install(TARGETS ${_install_targets}
   EXPORT adaptive_router_coreTargets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
