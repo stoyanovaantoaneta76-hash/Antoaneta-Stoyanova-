@@ -1,0 +1,40 @@
+name: Publish adaptive-router-core (CPU)
+
+on:
+  push:
+    tags:
+      - 'core-v*'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.24'
+
+      - name: Install Conan
+        run: uv tool install conan
+
+      - name: Build wheels
+        run: uv build --wheel
+        working-directory: ./adaptive_router_core
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ./adaptive_router_core/dist/

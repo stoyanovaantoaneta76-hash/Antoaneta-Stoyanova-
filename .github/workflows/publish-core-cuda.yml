@@ -1,0 +1,39 @@
+name: Publish adaptive-router-core-cu12 (CUDA)
+
+on:
+  push:
+    tags:
+      - 'core-cu12-v*'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    container:
+      image: nvidia/cuda:12.9.1-devel-ubuntu22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y curl cmake git
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install Conan
+        run: /root/.cargo/bin/uv tool install conan
+
+      - name: Build wheels
+        run: /root/.cargo/bin/uv build --wheel
+        working-directory: ./adaptive_router_core_cu12
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ./adaptive_router_core_cu12/dist/
