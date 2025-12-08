@@ -376,12 +376,28 @@ image = (
     .add_local_python_source(
         "adaptive_router_core",
         copy=True,
-        ignore=["build/**", "**/*.so", "**/*.pyd"],
+        ignore=[
+            "build/**",
+            "**/*.so",
+            "**/*.so.*",
+            "**/*.a",
+            "**/*.pyd",
+            "**/*.dll",
+            "**/*.dylib",
+        ],
     )
     .add_local_python_source(
         "adaptive_router_core_cu12",
         copy=True,
-        ignore=["build/**", "**/*.so", "**/*.pyd"],
+        ignore=[
+            "build/**",
+            "**/*.so",
+            "**/*.so.*",
+            "**/*.a",
+            "**/*.pyd",
+            "**/*.dll",
+            "**/*.dylib",
+        ],
     )
     .add_local_python_source("adaptive_router", copy=True)
     .add_local_python_source("adaptive_router_app", copy=True)  # Add app package
