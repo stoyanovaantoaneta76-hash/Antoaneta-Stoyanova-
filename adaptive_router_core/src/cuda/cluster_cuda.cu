@@ -176,7 +176,8 @@ std::pair<int, float> CudaClusterBackendT<float>::assign(const float* embedding,
 
   // 4. Epilogue kernel: dist²[i] = ||c_i||² + ||e||² - 2*dot[i]
   constexpr int kBlockSize = 256;
-  int grid_size = (n_clusters_ + kBlockSize - 1) / kBlockSize;
+  const unsigned int grid_size = static_cast<unsigned int>(
+      (n_clusters_ + kBlockSize - 1) / kBlockSize);
    epilogue_kernel<float><<<grid_size, kBlockSize, 0, stream_>>>(
        d_centroid_norms_, embed_norm, d_dots_, d_distances_, n_clusters_);
 
@@ -303,7 +304,8 @@ std::pair<int, double> CudaClusterBackendT<double>::assign(const double* embeddi
 
   // 4. Epilogue kernel: dist²[i] = ||c_i||² + ||e||² - 2*dot[i]
   constexpr int kBlockSize = 256;
-  int grid_size = (n_clusters_ + kBlockSize - 1) / kBlockSize;
+  const unsigned int grid_size = static_cast<unsigned int>(
+      (n_clusters_ + kBlockSize - 1) / kBlockSize);
    epilogue_kernel<double><<<grid_size, kBlockSize, 0, stream_>>>(
        d_centroid_norms_, embed_norm, d_dots_, d_distances_, n_clusters_);
 

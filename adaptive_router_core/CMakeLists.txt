@@ -143,6 +143,7 @@ function(adaptive_target_compile_options target)
       $<$<COMPILE_LANGUAGE:CUDA>:${_warn_base_cuda_prefixed}>
       $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<BOOL:${ADAPTIVE_WARNINGS_AS_ERRORS}>>:-Werror>
       $<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<BOOL:${ADAPTIVE_WARNINGS_AS_ERRORS}>>:-Xcompiler=-Werror>
+      $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>
     )
 
     # GCC-specific warnings
