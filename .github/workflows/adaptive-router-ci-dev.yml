@@ -1,20 +1,20 @@
-name: Adaptive Router Library Prod
+name: Adaptive Router Library Dev
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
     paths:
       - "adaptive_router/**"
       - "pyproject.toml"
       - "uv.lock"
-      - ".github/workflows/adaptive-router-ci.yml"
+      - ".github/workflows/adaptive-router-ci-dev.yml"
   pull_request:
-    branches: [main]
+    branches: [dev]
     paths:
       - "adaptive_router/**"
       - "pyproject.toml"
       - "uv.lock"
-      - ".github/workflows/adaptive-router-ci.yml"
+      - ".github/workflows/adaptive-router-ci-dev.yml"
   workflow_dispatch:
 
 concurrency:

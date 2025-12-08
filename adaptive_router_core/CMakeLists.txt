@@ -130,15 +130,17 @@ function(adaptive_target_compile_options target)
       -Wimplicit-fallthrough
       -Wmissing-include-dirs
     )
-    set(_warn_base_cuda)
-    foreach(_w IN LISTS _warn_base)
-      list(APPEND _warn_base_cuda "-Xcompiler=${_w}")
+    set(_warn_base_cuda ${_warn_base})
+    list(REMOVE_ITEM _warn_base_cuda -Wpedantic -Wold-style-cast)
+    set(_warn_base_cuda_prefixed)
+    foreach(_w IN LISTS _warn_base_cuda)
+      list(APPEND _warn_base_cuda_prefixed "-Xcompiler=${_w}")
     endforeach()
 
     # Apply host warnings for both C++ and CUDA compilations
     target_compile_options(${target} PRIVATE
       $<$<COMPILE_LANGUAGE:CXX>:${_warn_base}>
-      $<$<COMPILE_LANGUAGE:CUDA>:${_warn_base_cuda}>
+      $<$<COMPILE_LANGUAGE:CUDA>:${_warn_base_cuda_prefixed}>
       $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<BOOL:${ADAPTIVE_WARNINGS_AS_ERRORS}>>:-Werror>
       $<$<AND:$<COMPILE_LANGUAGE:CUDA>,$<BOOL:${ADAPTIVE_WARNINGS_AS_ERRORS}>>:-Xcompiler=-Werror>
     )
