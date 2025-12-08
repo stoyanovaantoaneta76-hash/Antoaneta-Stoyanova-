@@ -3,6 +3,8 @@ name: Adaptive Router Library Prod
 on:
   push:
     branches: [main]
+    tags:
+      - "v*"
     paths:
       - "adaptive_router/**"
       - "pyproject.toml"
@@ -16,6 +18,8 @@ on:
       - "uv.lock"
       - ".github/workflows/adaptive-router-ci.yml"
   workflow_dispatch:
+
+# Note: paths filter is ignored for tag pushes per GitHub Actions behavior
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
