@@ -373,8 +373,16 @@ image = (
             "SENTENCE_TRANSFORMERS_HOME": "/vol/model_cache",
         }
     )
-    .add_local_python_source("adaptive_router_core", copy=True)
-    .add_local_python_source("adaptive_router_core_cu12", copy=True)
+    .add_local_python_source(
+        "adaptive_router_core",
+        copy=True,
+        ignore=["build/**", "**/*.so", "**/*.pyd"],
+    )
+    .add_local_python_source(
+        "adaptive_router_core_cu12",
+        copy=True,
+        ignore=["build/**", "**/*.so", "**/*.pyd"],
+    )
     .add_local_python_source("adaptive_router", copy=True)
     .add_local_python_source("adaptive_router_app", copy=True)  # Add app package
     .pip_install(

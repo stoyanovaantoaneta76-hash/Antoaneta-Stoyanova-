@@ -1,0 +1,12 @@
+adaptive_router_core/build/
+adaptive_router_core/**/build/
+adaptive_router_core/**/*.so
+adaptive_router_core_cu12/build/
+adaptive_router_core_cu12/**/build/
+adaptive_router_core_cu12/**/*.so
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
