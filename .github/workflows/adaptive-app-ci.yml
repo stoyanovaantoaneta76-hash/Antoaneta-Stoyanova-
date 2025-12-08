@@ -74,7 +74,7 @@ jobs:
         run: uv sync
 
       - name: Deploy to Modal
-        run: uv run modal deploy adaptive_router_app/main.py
+        run: uv run modal deploy src/adaptive_router_app/main.py
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}

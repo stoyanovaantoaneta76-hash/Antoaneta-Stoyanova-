@@ -59,7 +59,7 @@ pip install modal
 modal token new
 
 # Deploy the application
-modal deploy adaptive_router_app/main.py
+modal deploy src/adaptive_router_app/main.py
 
 # View logs
 modal logs adaptive-router
