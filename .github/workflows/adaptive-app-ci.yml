@@ -4,19 +4,19 @@ on:
   push:
     branches: [main]
     paths:
-      - 'adaptive_router_app/**'
-      - 'adaptive_router/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - '.github/workflows/adaptive-app-ci.yml'
+      - "adaptive_router_app/**"
+      - "adaptive_router/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/adaptive-app-ci.yml"
   pull_request:
     branches: [main]
     paths:
-      - 'adaptive_router_app/**'
-      - 'adaptive_router/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - '.github/workflows/adaptive-app-ci.yml'
+      - "adaptive_router_app/**"
+      - "adaptive_router/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/adaptive-app-ci.yml"
   workflow_dispatch:
 
 concurrency:
@@ -27,7 +27,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: adaptive_router_app
