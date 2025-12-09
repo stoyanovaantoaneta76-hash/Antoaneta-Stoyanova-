@@ -39,7 +39,7 @@ jobs:
           CIBW_BEFORE_ALL_MACOS: "brew install cmake"
           CIBW_BEFORE_BUILD: "pip install conan && conan profile detect --force"
           CIBW_BEFORE_BUILD_MACOS: "pip install conan && conan profile detect --force --name default"
-          CIBW_ENVIRONMENT_MACOS: "CONAN_PROFILE_HOST=default"
+          CIBW_ENVIRONMENT_MACOS: "CONAN_PROFILE_HOST=default MACOSX_DEPLOYMENT_TARGET=13.3"
         with:
           package-dir: ./adaptive_router_core
 
