@@ -35,6 +35,18 @@ jobs:
             ln -s /usr/local/cuda-12.9 /usr/local/cuda || true
             dnf clean all
           CIBW_BEFORE_BUILD: "pip install conan && conan profile detect --force"
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: >
+            auditwheel repair --strip
+            --exclude libcuda.so.1
+            --exclude libcudart.so.12
+            --exclude libnvrtc.so.12
+            --exclude libnvrtc-builtins.so.12
+            --exclude libcublas.so.12
+            --exclude libcublasLt.so.12
+            --exclude libcusolver.so.12
+            --exclude libcusparse.so.12
+            --exclude libnvjitlink.so.12
+            -w {dest_dir} {wheel}
           CIBW_ENVIRONMENT: "CUDACXX=/usr/local/cuda-12.9/bin/nvcc CUDAToolkit_ROOT=/usr/local/cuda-12.9 PATH=/usr/local/cuda-12.9/bin:/usr/local/cuda/bin:$PATH LD_LIBRARY_PATH=/usr/local/cuda-12.9/lib64:$LD_LIBRARY_PATH"
         with:
           package-dir: ./adaptive_router_core_cu12
