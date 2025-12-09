@@ -10,11 +10,20 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
+  build_wheels:
+    name: Build wheels for ${{ matrix.os }}
+    runs-on: ${{ matrix.runs-on }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: linux-intel
+            runs-on: ubuntu-latest
+          - os: windows-intel
+            runs-on: windows-latest
+          - os: macos-intel
+            runs-on: macos-15-intel
+          - os: macos-arm
+            runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v5
@@ -25,30 +34,26 @@ jobs:
           CIBW_BUILD: "cp311-* cp312-* cp313-*"
           CIBW_SKIP: "*-musllinux_* *-win32 *_i686"
           CIBW_BUILD_VERBOSITY: 1
-          CIBW_MANYLINUX_X86_64_IMAGE: "quay.io/pypa/manylinux_2_35_x86_64"
           CIBW_BEFORE_ALL_LINUX: "dnf install -y cmake"
           CIBW_BEFORE_ALL_MACOS: "brew install cmake"
           CIBW_BEFORE_BUILD: "pip install conan && conan profile detect --force"
         with:
           package-dir: ./adaptive_router_core
 
-      - name: Upload wheel
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
-          path: wheelhouse/*.whl
+          path: ./wheelhouse/*.whl
 
   publish:
-    needs: build
+    needs: build_wheels
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download all wheels
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           pattern: cibw-wheels-*
+          path: dist
           merge-multiple: true
-          path: dist/
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@release/v1

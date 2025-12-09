@@ -10,7 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  build_wheels:
+    name: Build CUDA wheels
     runs-on: ubuntu-latest
 
     steps:
@@ -22,7 +23,6 @@ jobs:
           CIBW_BUILD: "cp311-* cp312-* cp313-*"
           CIBW_SKIP: "*-musllinux_* *_i686"
           CIBW_BUILD_VERBOSITY: 1
-          CIBW_MANYLINUX_X86_64_IMAGE: "quay.io/pypa/manylinux_2_35_x86_64"
           CIBW_BEFORE_ALL_LINUX: |
             dnf install -y wget cmake
             wget https://developer.download.nvidia.com/compute/cuda/12.9.1/local_installers/cuda-repo-rhel9-12-9-local-12.9.1_560.35.05-1.x86_64.rpm
@@ -34,22 +34,19 @@ jobs:
         with:
           package-dir: ./adaptive_router_core_cu12
 
-      - name: Upload wheel
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: cibw-wheels-cuda
-          path: wheelhouse/*.whl
+          path: ./wheelhouse/*.whl
 
   publish:
-    needs: build
+    needs: build_wheels
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download wheels
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: cibw-wheels-cuda
-          path: dist/
+          path: dist
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@release/v1
