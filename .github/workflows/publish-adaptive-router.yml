@@ -3,7 +3,7 @@ name: Release to PyPI
 on:
   push:
     tags:
-      - "v*"
+      - "router-v*"
 
 jobs:
   publish:
@@ -24,11 +24,11 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: echo "VERSION=${GITHUB_REF_NAME#router-v}" >> $GITHUB_OUTPUT
 
       - name: Update version with uv
         working-directory: adaptive_router
-        run: uv version ${{ steps.version.outputs.VERSION }} --no-sync
+        run: uv version ${{ steps.version.outputs.VERSION }} --package adaptive_router --no-sync
 
       - name: Build package with uv
         run: uv build --no-sources --package adaptive_router
