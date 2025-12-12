@@ -29,6 +29,7 @@ target_link_libraries(adaptive_cuda
 set_target_properties(adaptive_cuda PROPERTIES
   CUDA_STANDARD 20
   CUDA_SEPARABLE_COMPILATION ON
+  CUDA_RESOLVE_DEVICE_SYMBOLS ON
   CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES}
 )
 
