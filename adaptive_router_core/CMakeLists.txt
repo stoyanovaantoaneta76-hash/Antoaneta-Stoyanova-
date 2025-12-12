@@ -47,6 +47,12 @@ find_package(Eigen3 REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(msgpack-cxx REQUIRED)
 
+# Enable testing
+if(ADAPTIVE_BUILD_TESTS)
+  include(CTest)
+  enable_testing()
+endif()
+
 # Add modules
 add_subdirectory(core)
 add_subdirectory(bindings)
