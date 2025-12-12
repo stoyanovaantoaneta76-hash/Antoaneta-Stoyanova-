@@ -50,6 +50,10 @@ jobs:
       - name: Install build tools
         run: uv pip install conan --system
 
+      - name: Install Python test dependencies
+        working-directory: adaptive_router_core/bindings/python
+        run: uv sync --group test --no-install-project
+
       - name: Setup Conan profile
         run: conan profile detect --force
 
