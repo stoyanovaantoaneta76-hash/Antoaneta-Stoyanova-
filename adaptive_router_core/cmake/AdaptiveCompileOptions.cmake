@@ -15,14 +15,17 @@ function(adaptive_target_compile_options target)
       $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<BOOL:${ADAPTIVE_WARNINGS_AS_ERRORS}>>:-Werror>
     )
 
-    if(ADAPTIVE_ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-      target_compile_options(${target} PRIVATE
+    # Sanitizers for Debug builds (works with multi-config generators like VS/Xcode/Ninja Multi-Config)
+    target_compile_options(${target} PRIVATE
+      $<$<AND:$<BOOL:${ADAPTIVE_ENABLE_SANITIZERS}>,$<CONFIG:Debug>>:
         -fsanitize=address,undefined -fno-omit-frame-pointer
-      )
-      target_link_options(${target} PRIVATE
+      >
+    )
+    target_link_options(${target} PRIVATE
+      $<$<AND:$<BOOL:${ADAPTIVE_ENABLE_SANITIZERS}>,$<CONFIG:Debug>>:
         -fsanitize=address,undefined
-      )
-    endif()
+      >
+    )
 
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(${target} PRIVATE

@@ -3,10 +3,9 @@
 # =============================================================================
 cmake_minimum_required(VERSION 3.24)
 
-# Read version from bindings/python/pyproject.toml
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/bindings/python/pyproject.toml" PYPROJECT_CONTENT)
-string(REGEX MATCH "version = \"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _ ${PYPROJECT_CONTENT})
-set(ADAPTIVE_VERSION ${CMAKE_MATCH_1})
+# Read version from dedicated VERSION file (decoupled from Python packaging)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" ADAPTIVE_VERSION)
+string(STRIP "${ADAPTIVE_VERSION}" ADAPTIVE_VERSION)
 
 # Options
 option(ADAPTIVE_ENABLE_CUDA "Enable CUDA GPU acceleration (AUTO/ON/OFF)" AUTO)

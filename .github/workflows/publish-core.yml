@@ -37,7 +37,7 @@ jobs:
        - name: Assert version matches tag
          shell: bash
          run: |
-           VERSION=$(grep '^version = ' adaptive_router_core/bindings/python/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+           VERSION=$(cat adaptive_router_core/VERSION | tr -d '[:space:]')
            TAG_VERSION=${{ steps.version.outputs.version }}
            if [ "$VERSION" != "$TAG_VERSION" ]; then
              echo "Error: pyproject.toml version ($VERSION) does not match tag ($TAG_VERSION)"
@@ -169,7 +169,7 @@ jobs:
       - name: Validate wheel versions
         shell: bash
         run: |
-           VERSION=$(grep '^version = ' adaptive_router_core/bindings/python/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+           VERSION=$(cat adaptive_router_core/VERSION | tr -d '[:space:]')
           cd dist
           for file in *.whl; do
             if [[ "$file" != *"$VERSION"* ]]; then
