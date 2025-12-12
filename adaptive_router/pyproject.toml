@@ -36,6 +36,8 @@ dependencies = [
   "deepeval>=3.7.0",
   "einops>=0.8.1",
   "msgpack>=1.1.2,<2",
+  # ML Framework (required by sentence-transformers/transformers)
+  "torch>=2.9.1",
 ]
 
 
@@ -47,13 +49,8 @@ Documentation = "https://docs.llmadaptive.uk"
 
 
 [project.optional-dependencies]
-cpu = ["adaptive-router-core>=0.1.4,<1"]
-cu12 = ["adaptive-router-core-cu12>=0.1.4,<1 ; sys_platform == 'linux'"]
-
-
-[tool.uv.sources]
-adaptive-router-core = { workspace = true }
-adaptive-router-core-cu12 = { workspace = true }
+cpu = ["adaptive-router-core>=0.1.0,<1"]
+cu12 = ["adaptive-router-core-cu12>=0.1.0,<1 ; sys_platform == 'linux'"]
 
 
 [dependency-groups]
@@ -103,14 +100,18 @@ testpaths = ["tests"]
 
 [tool.coverage.report]
 exclude_lines = [
-  "pragma: no cover",
-  "def __repr__",
-  "if self.debug:",
-  "if settings.DEBUG",
-  "raise AssertionError",
-  "raise NotImplementedError",
-  "if 0:",
-  "if __name__ == .__main__.:",
-  "class .*\\bProtocol\\):",
-  "@(abc\\.)?abstractmethod",
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
 ]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
