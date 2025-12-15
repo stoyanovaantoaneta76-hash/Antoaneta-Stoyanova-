@@ -382,9 +382,6 @@ adaptive_router/
 # Run all tests
 uv run pytest adaptive_router/tests/
 
-# Run unit tests only
-uv run pytest adaptive_router/tests/ -m unit
-
 # Run with coverage
 uv run pytest adaptive_router/tests/ --cov=adaptive_router --cov-report=html
 ```
