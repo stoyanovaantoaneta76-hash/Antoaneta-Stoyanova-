@@ -2,12 +2,17 @@
 #include <cstring>
 #include <exception>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <span>
+#include <variant>
 
 #include "adaptive.h"
 #include <adaptive_core/router.hpp>
 #include <adaptive_core/profile.hpp>
+
+// Type-erased router: either float or double precision
+using RouterVariant = std::variant<RouterT<float>, RouterT<double>>;
 
 // Internal helper to convert std::string to C string
 static char* str_duplicate(const std::string& str) {
@@ -36,141 +41,141 @@ static void cleanup_route_result_contents(AdaptiveRouteResult* result) {
   result->alternatives_count = 0;
 }
 
+// Get RouterVariant pointer from opaque handle
+static RouterVariant* get_router(AdaptiveRouter* router) {
+  return router ? reinterpret_cast<RouterVariant*>(router) : nullptr;
+}
+
+// Factory: creates correct router type based on profile dtype
+static std::optional<RouterVariant> create_router_variant(RouterProfile profile) {
+  if (profile.is_float64()) {
+    auto result = RouterT<double>::from_profile(std::move(profile));
+    if (!result) return std::nullopt;
+    return RouterVariant{std::in_place_type<RouterT<double>>, std::move(result.value())};
+  } else {
+    auto result = RouterT<float>::from_profile(std::move(profile));
+    if (!result) return std::nullopt;
+    return RouterVariant{std::in_place_type<RouterT<float>>, std::move(result.value())};
+  }
+}
+
+// Helper to build AdaptiveRouteResult from RouteResponse
+static AdaptiveRouteResult* build_route_result(const RouteResponse& response) {
+  auto* result = static_cast<AdaptiveRouteResult*>(malloc(sizeof(AdaptiveRouteResult)));
+  if (!result) return nullptr;
+
+  result->selected_model = str_duplicate(response.selected_model);
+  if (!result->selected_model) {
+    free(result);
+    return nullptr;
+  }
+
+  result->cluster_id = response.cluster_id;
+  result->cluster_distance = response.cluster_distance;
+
+  result->alternatives_count = response.alternatives.size();
+  if (result->alternatives_count > 0) {
+    result->alternatives = static_cast<char**>(malloc(sizeof(char*) * result->alternatives_count));
+    if (!result->alternatives) {
+      free(result->selected_model);
+      free(result);
+      return nullptr;
+    }
+
+    for (size_t i = 0; i < result->alternatives_count; ++i) {
+      result->alternatives[i] = str_duplicate(response.alternatives[i]);
+      if (!result->alternatives[i]) {
+        for (size_t j = 0; j < i; ++j) free(result->alternatives[j]);
+        free(result->alternatives);
+        free(result->selected_model);
+        free(result);
+        return nullptr;
+      }
+    }
+  } else {
+    result->alternatives = nullptr;
+  }
+
+  return result;
+}
+
 // C API implementation
 extern "C" {
 
 AdaptiveRouter* adaptive_router_create(const char* profile_path) {
-  if (!profile_path) {
-    return nullptr;
-  }
-
+  if (!profile_path) return nullptr;
   try {
     auto profile = RouterProfile::from_json(profile_path);
-    auto result = Router::from_profile(std::move(profile));
-    if (!result) {
-      return nullptr;
-    }
-    return reinterpret_cast<AdaptiveRouter*>(new Router(std::move(result.value())));
-  } catch (const std::exception&) {
-    return nullptr;
+    auto variant = create_router_variant(std::move(profile));
+    if (!variant) return nullptr;
+    return reinterpret_cast<AdaptiveRouter*>(new RouterVariant(std::move(*variant)));
   } catch (...) {
     return nullptr;
   }
 }
 
 AdaptiveRouter* adaptive_router_create_from_json(const char* json_str) {
-  if (!json_str) {
-    return nullptr;
-  }
-
+  if (!json_str) return nullptr;
   try {
     auto profile = RouterProfile::from_json_string(json_str);
-    auto result = Router::from_profile(std::move(profile));
-    if (!result) {
-      return nullptr;
-    }
-    return reinterpret_cast<AdaptiveRouter*>(new Router(std::move(result.value())));
-  } catch (const std::exception&) {
-    return nullptr;
+    auto variant = create_router_variant(std::move(profile));
+    if (!variant) return nullptr;
+    return reinterpret_cast<AdaptiveRouter*>(new RouterVariant(std::move(*variant)));
   } catch (...) {
     return nullptr;
   }
 }
 
 AdaptiveRouter* adaptive_router_create_from_binary(const char* path) {
-  if (!path) {
-    return nullptr;
-  }
-
+  if (!path) return nullptr;
   try {
     auto profile = RouterProfile::from_binary(path);
-    auto result = Router::from_profile(std::move(profile));
-    if (!result) {
-      return nullptr;
-    }
-    return reinterpret_cast<AdaptiveRouter*>(new Router(std::move(result.value())));
-  } catch (const std::exception&) {
-    return nullptr;
+    auto variant = create_router_variant(std::move(profile));
+    if (!variant) return nullptr;
+    return reinterpret_cast<AdaptiveRouter*>(new RouterVariant(std::move(*variant)));
   } catch (...) {
     return nullptr;
   }
 }
 
 void adaptive_router_destroy(AdaptiveRouter* router) {
-  if (router) {
-    delete reinterpret_cast<Router*>(router);
-  }
+  delete get_router(router);
 }
 
 AdaptiveRouteResult* adaptive_router_route(AdaptiveRouter* router, const float* embedding,
-                                           size_t embedding_size, float cost_bias) {
-  if (!router || !embedding) {
-    return nullptr;
-  }
-
+                                            size_t embedding_size, float cost_bias) {
+  if (!router || !embedding) return nullptr;
   try {
-    auto* cpp_router = reinterpret_cast<Router*>(router);
-    auto response = cpp_router->route(embedding, embedding_size, cost_bias);
+    auto* var = get_router(router);
 
-    auto* result = static_cast<AdaptiveRouteResult*>(malloc(sizeof(AdaptiveRouteResult)));
-    if (!result) {
+    // Strict: only works on float32 router
+    if (!std::holds_alternative<RouterT<float>>(*var)) {
       return nullptr;
     }
 
-    result->selected_model = str_duplicate(response.selected_model);
-    if (!result->selected_model) {
-      free(result);
-      return nullptr;
-    }
-
-    result->cluster_id = response.cluster_id;
-    result->cluster_distance = response.cluster_distance;
-
-    // Allocate alternatives array
-    result->alternatives_count = response.alternatives.size();
-    if (result->alternatives_count > 0) {
-      result->alternatives
-          = static_cast<char**>(malloc(sizeof(char*) * result->alternatives_count));
-      if (!result->alternatives) {
-        free(result->selected_model);
-        free(result);
-        return nullptr;
-      }
-
-      for (size_t alt_idx = 0; alt_idx < result->alternatives_count; ++alt_idx) {
-        result->alternatives[alt_idx] = str_duplicate(response.alternatives[alt_idx]);
-        if (!result->alternatives[alt_idx]) {
-          // Cleanup previously allocated strings
-          for (size_t cleanup_idx = 0; cleanup_idx < alt_idx; ++cleanup_idx) {
-            free(result->alternatives[cleanup_idx]);
-          }
-          free(result->alternatives);
-          free(result->selected_model);
-          free(result);
-          return nullptr;
-        }
-      }
-    } else {
-      result->alternatives = nullptr;
-    }
-
-    return result;
-  } catch (const std::exception&) {
+    auto& r = std::get<RouterT<float>>(*var);
+    auto response = r.route(embedding, embedding_size, cost_bias);
+    return build_route_result(response);
+  } catch (...) {
     return nullptr;
   }
 }
 
 char* adaptive_router_route_simple(AdaptiveRouter* router, const float* embedding,
-                                   size_t embedding_size, float cost_bias) {
-  if (!router || !embedding) {
-    return nullptr;
-  }
-
+                                    size_t embedding_size, float cost_bias) {
+  if (!router || !embedding) return nullptr;
   try {
-    auto* cpp_router = reinterpret_cast<Router*>(router);
-    auto response = cpp_router->route(embedding, embedding_size, cost_bias);
+    auto* var = get_router(router);
+
+    // Strict: only works on float32 router
+    if (!std::holds_alternative<RouterT<float>>(*var)) {
+      return nullptr;
+    }
+
+    auto& r = std::get<RouterT<float>>(*var);
+    auto response = r.route(embedding, embedding_size, cost_bias);
     return str_duplicate(response.selected_model);
-  } catch (const std::exception&) {
+  } catch (...) {
     return nullptr;
   }
 }
@@ -183,60 +188,19 @@ void adaptive_route_result_free(AdaptiveRouteResult* result) {
 
 AdaptiveRouteResult* adaptive_router_route_double(AdaptiveRouter* router, const double* embedding,
                                                   size_t embedding_size, float cost_bias) {
-  if (!router || !embedding) {
-    return nullptr;
-  }
-
+  if (!router || !embedding) return nullptr;
   try {
-    auto* cpp_router = reinterpret_cast<Router*>(router);
-    // Convert double embedding to float
-    std::vector<float> float_embedding(embedding, embedding + embedding_size);
-    auto response = cpp_router->route(float_embedding.data(), float_embedding.size(), cost_bias);
+    auto* var = get_router(router);
 
-    auto* result = static_cast<AdaptiveRouteResult*>(malloc(sizeof(AdaptiveRouteResult)));
-    if (!result) {
+    // Strict: only works on float64 router
+    if (!std::holds_alternative<RouterT<double>>(*var)) {
       return nullptr;
     }
 
-    result->selected_model = str_duplicate(response.selected_model);
-    if (!result->selected_model) {
-      free(result);
-      return nullptr;
-    }
-
-    result->cluster_id = response.cluster_id;
-    result->cluster_distance = response.cluster_distance;
-
-    // Allocate alternatives array
-    result->alternatives_count = response.alternatives.size();
-    if (result->alternatives_count > 0) {
-      result->alternatives
-          = static_cast<char**>(malloc(sizeof(char*) * result->alternatives_count));
-      if (!result->alternatives) {
-        free(result->selected_model);
-        free(result);
-        return nullptr;
-      }
-
-      for (size_t alt_idx = 0; alt_idx < result->alternatives_count; ++alt_idx) {
-        result->alternatives[alt_idx] = str_duplicate(response.alternatives[alt_idx]);
-        if (!result->alternatives[alt_idx]) {
-          // Cleanup previously allocated strings
-          for (size_t cleanup_idx = 0; cleanup_idx < alt_idx; ++cleanup_idx) {
-            free(result->alternatives[cleanup_idx]);
-          }
-          free(result->alternatives);
-          free(result->selected_model);
-          free(result);
-          return nullptr;
-        }
-      }
-    } else {
-      result->alternatives = nullptr;
-    }
-
-    return result;
-  } catch (const std::exception&) {
+    auto& r = std::get<RouterT<double>>(*var);
+    auto response = r.route(embedding, embedding_size, cost_bias);
+    return build_route_result(response);
+  } catch (...) {
     return nullptr;
   }
 }
@@ -384,27 +348,23 @@ AdaptiveBatchRouteResult* adaptive_router_route_batch_double(
 void adaptive_string_free(char* str) { free(str); }
 
 size_t adaptive_router_get_n_clusters(AdaptiveRouter* router) {
-  if (!router) {
-    return 0;
-  }
-
+  if (!router) return 0;
   try {
-    auto* cpp_router = reinterpret_cast<Router*>(router);
-    return static_cast<size_t>(cpp_router->get_n_clusters());
-  } catch (const std::exception&) {
+    return std::visit([](auto& r) -> size_t {
+      return static_cast<size_t>(r.get_n_clusters());
+    }, *get_router(router));
+  } catch (...) {
     return 0;
   }
 }
 
 size_t adaptive_router_get_embedding_dim(AdaptiveRouter* router) {
-  if (!router) {
-    return 0;
-  }
-
+  if (!router) return 0;
   try {
-    auto* cpp_router = reinterpret_cast<Router*>(router);
-    return static_cast<size_t>(cpp_router->get_embedding_dim());
-  } catch (const std::exception&) {
+    return std::visit([](auto& r) -> size_t {
+      return static_cast<size_t>(r.get_embedding_dim());
+    }, *get_router(router));
+  } catch (...) {
     return 0;
   }
 }
@@ -414,10 +374,10 @@ char** adaptive_router_get_supported_models(AdaptiveRouter* router, size_t* coun
     if (count) *count = 0;
     return nullptr;
   }
-
   try {
-    auto* cpp_router = reinterpret_cast<Router*>(router);
-    auto models = cpp_router->get_supported_models();
+    auto models = std::visit([](auto& r) {
+      return r.get_supported_models();
+    }, *get_router(router));
 
     *count = models.size();
     if (models.empty()) {
@@ -444,7 +404,7 @@ char** adaptive_router_get_supported_models(AdaptiveRouter* router, size_t* coun
     }
 
     return result;
-  } catch (const std::exception&) {
+  } catch (...) {
     *count = 0;
     return nullptr;
   }
@@ -456,6 +416,14 @@ void adaptive_string_array_free(char** strings, size_t count) {
     std::ranges::for_each(strings_span, [](char* str) { free(str); });
     free(strings);
   }
+}
+
+AdaptivePrecision adaptive_router_get_precision(AdaptiveRouter* router) {
+  if (!router) return ADAPTIVE_PRECISION_UNKNOWN;
+  auto* var = get_router(router);
+  return std::holds_alternative<RouterT<double>>(*var)
+      ? ADAPTIVE_PRECISION_FLOAT64
+      : ADAPTIVE_PRECISION_FLOAT32;
 }
 
 }  // extern "C"

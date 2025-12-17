@@ -19,6 +19,8 @@ struct RouteResponse {
 template<typename Scalar = float>
 class RouterT {
 public:
+  using value_type = Scalar;  // Enable type detection in std::visit
+
   static Result<RouterT, std::string> from_profile(RouterProfile profile) noexcept {
     try {
       RouterT r;

@@ -48,6 +48,49 @@ static const char* kTestProfileJson = R"({
   ]
 })";
 
+static const char* kTestProfileJsonFloat64 = R"({
+  "metadata": {
+    "n_clusters": 3,
+    "embedding_model": "test-model",
+    "dtype": "float64",
+    "silhouette_score": 0.85,
+    "clustering": {
+      "n_init": 10,
+      "algorithm": "lloyd"
+    },
+    "routing": {
+      "lambda_min": 0.0,
+      "lambda_max": 2.0,
+      "max_alternatives": 2
+    }
+  },
+  "cluster_centers": {
+    "n_clusters": 3,
+    "feature_dim": 4,
+    "cluster_centers": [
+      [1.0, 0.0, 0.0, 0.0],
+      [0.0, 1.0, 0.0, 0.0],
+      [0.0, 0.0, 1.0, 0.0]
+    ]
+  },
+  "models": [
+    {
+      "provider": "provider1",
+      "model_name": "gpt-4",
+      "cost_per_1m_input_tokens": 30.0,
+      "cost_per_1m_output_tokens": 60.0,
+      "error_rates": [0.01, 0.02, 0.015]
+    },
+    {
+      "provider": "provider2",
+      "model_name": "llama",
+      "cost_per_1m_input_tokens": 0.3,
+      "cost_per_1m_output_tokens": 0.6,
+      "error_rates": [0.05, 0.06, 0.055]
+    }
+  ]
+})";
+
 class CFFITest : public ::testing::Test {
 protected:
   AdaptiveRouter* router_ = nullptr;
@@ -111,15 +154,11 @@ TEST_F(CFFITest, SingleRouteWithDoubleReturnsValidResult) {
   // Create double-precision embedding close to second cluster [0,1,0,0]
   std::vector<double> embedding = {0.05, 0.95, 0.0, 0.0};
 
+  // With strict type enforcement, double routing on float32 router returns nullptr
   AdaptiveRouteResult* result = adaptive_router_route_double(
       router_, embedding.data(), embedding_dim, 0.5f);
 
-  ASSERT_NE(result, nullptr);
-  EXPECT_NE(result->selected_model, nullptr);
-  EXPECT_EQ(result->cluster_id, 1);
-  EXPECT_GE(result->cluster_distance, 0.0f);
-
-  adaptive_route_result_free(result);
+  EXPECT_EQ(result, nullptr);
 }
 
 TEST_F(CFFITest, RouteSimpleReturnsModelId) {
@@ -182,13 +221,11 @@ TEST_F(CFFITest, BatchRouteWithDoubleReturnsValidResults) {
     0.0, 0.0, 0.95, 0.05
   };
 
+  // With strict type enforcement, double batch routing on float32 router returns nullptr
   AdaptiveBatchRouteResult* result = adaptive_router_route_batch_double(
       router_, embeddings.data(), n_embeddings, embedding_dim, 0.5f);
 
-  ASSERT_NE(result, nullptr);
-  EXPECT_EQ(result->count, n_embeddings);
-
-  adaptive_batch_route_result_free(result);
+  EXPECT_EQ(result, nullptr);
 }
 
 TEST_F(CFFITest, GetNClustersReturnsCorrectValue) {
@@ -342,4 +379,113 @@ TEST_F(CFFITest, RouterDestroyHandlesNull) {
   // Should not crash
   adaptive_router_destroy(nullptr);
   EXPECT_TRUE(true);
+}
+
+class CFFITestFloat64 : public ::testing::Test {
+protected:
+  AdaptiveRouter* router_ = nullptr;
+
+  void SetUp() override {
+    router_ = adaptive_router_create_from_json(kTestProfileJsonFloat64);
+    ASSERT_NE(router_, nullptr) << "Failed to create float64 router from JSON";
+  }
+
+  void TearDown() override {
+    if (router_) {
+      adaptive_router_destroy(router_);
+      router_ = nullptr;
+    }
+  }
+};
+
+// Precision query tests
+TEST_F(CFFITest, GetPrecisionReturnsFloat32) {
+  AdaptivePrecision precision = adaptive_router_get_precision(router_);
+  EXPECT_EQ(precision, ADAPTIVE_PRECISION_FLOAT32);
+}
+
+TEST_F(CFFITestFloat64, GetPrecisionReturnsFloat64) {
+  AdaptivePrecision precision = adaptive_router_get_precision(router_);
+  EXPECT_EQ(precision, ADAPTIVE_PRECISION_FLOAT64);
+}
+
+TEST(CFFITestPrecision, GetPrecisionHandlesNullRouter) {
+  AdaptivePrecision precision = adaptive_router_get_precision(nullptr);
+  EXPECT_EQ(precision, ADAPTIVE_PRECISION_UNKNOWN);
+}
+
+// Type mismatch tests - strict enforcement
+TEST_F(CFFITest, RouteDoubleOnFloat32RouterReturnsNull) {
+  std::vector<double> embedding = {0.95, 0.05, 0.0, 0.0};
+  AdaptiveRouteResult* result = adaptive_router_route_double(
+      router_, embedding.data(), embedding.size(), 0.5f);
+  EXPECT_EQ(result, nullptr);  // Type mismatch: can't use double on float32 router
+}
+
+TEST_F(CFFITestFloat64, RouteFloatOnFloat64RouterReturnsNull) {
+  std::vector<float> embedding = {0.95f, 0.05f, 0.0f, 0.0f};
+  AdaptiveRouteResult* result = adaptive_router_route(
+      router_, embedding.data(), embedding.size(), 0.5f);
+  EXPECT_EQ(result, nullptr);  // Type mismatch: can't use float on float64 router
+}
+
+// Float64 router working correctly with double embeddings
+TEST_F(CFFITestFloat64, RouteDoubleOnFloat64RouterSucceeds) {
+  std::vector<double> embedding = {0.95, 0.05, 0.0, 0.0};
+  AdaptiveRouteResult* result = adaptive_router_route_double(
+      router_, embedding.data(), embedding.size(), 0.5f);
+
+  ASSERT_NE(result, nullptr);
+  EXPECT_NE(result->selected_model, nullptr);
+  EXPECT_EQ(result->cluster_id, 0);
+
+  adaptive_route_result_free(result);
+}
+
+TEST_F(CFFITestFloat64, BatchRouteDoubleOnFloat64RouterSucceeds) {
+  std::vector<double> embeddings = {
+    0.95, 0.05, 0.0, 0.0,
+    0.0, 0.0, 0.95, 0.05
+  };
+
+  AdaptiveBatchRouteResult* result = adaptive_router_route_batch_double(
+      router_, embeddings.data(), 2, 4, 0.5f);
+
+  ASSERT_NE(result, nullptr);
+  EXPECT_EQ(result->count, 2);
+  EXPECT_EQ(result->results[0].cluster_id, 0);
+  EXPECT_EQ(result->results[1].cluster_id, 2);
+
+  adaptive_batch_route_result_free(result);
+}
+
+TEST_F(CFFITest, BatchRouteDoubleOnFloat32RouterReturnsNull) {
+  std::vector<double> embeddings = {0.95, 0.05, 0.0, 0.0};
+  AdaptiveBatchRouteResult* result = adaptive_router_route_batch_double(
+      router_, embeddings.data(), 1, 4, 0.5f);
+  EXPECT_EQ(result, nullptr);
+}
+
+TEST_F(CFFITestFloat64, BatchRouteFloatOnFloat64RouterReturnsNull) {
+  std::vector<float> embeddings = {0.95f, 0.05f, 0.0f, 0.0f};
+  AdaptiveBatchRouteResult* result = adaptive_router_route_batch(
+      router_, embeddings.data(), 1, 4, 0.5f);
+  EXPECT_EQ(result, nullptr);
+}
+
+// Query functions work on both router types
+TEST_F(CFFITestFloat64, GetNClustersWorks) {
+  EXPECT_EQ(adaptive_router_get_n_clusters(router_), 3);
+}
+
+TEST_F(CFFITestFloat64, GetEmbeddingDimWorks) {
+  EXPECT_EQ(adaptive_router_get_embedding_dim(router_), 4);
+}
+
+TEST_F(CFFITestFloat64, GetSupportedModelsWorks) {
+  size_t count = 0;
+  char** models = adaptive_router_get_supported_models(router_, &count);
+  ASSERT_NE(models, nullptr);
+  EXPECT_EQ(count, 2);
+  adaptive_string_array_free(models, count);
 }

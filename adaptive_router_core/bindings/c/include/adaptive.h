@@ -47,6 +47,15 @@ typedef struct {
 } AdaptiveBatchRouteResult;
 
 /**
+ * Router precision type
+ */
+typedef enum {
+  ADAPTIVE_PRECISION_FLOAT32 = 0,
+  ADAPTIVE_PRECISION_FLOAT64 = 1,
+  ADAPTIVE_PRECISION_UNKNOWN = -1
+} AdaptivePrecision;
+
+/**
  * Create a router from a JSON profile file
  * @param profile_path Path to the JSON profile file
  * @return Router handle, or NULL on error
@@ -179,6 +188,13 @@ ADAPTIVE_API size_t adaptive_router_get_embedding_dim(AdaptiveRouter* router);
  * @return Array of model IDs (caller must free each string and the array)
  */
 ADAPTIVE_API char** adaptive_router_get_supported_models(AdaptiveRouter* router, size_t* count);
+
+/**
+ * Get router precision type
+ * @param router Router handle
+ * @return ADAPTIVE_PRECISION_FLOAT32, ADAPTIVE_PRECISION_FLOAT64, or ADAPTIVE_PRECISION_UNKNOWN if router is NULL
+ */
+ADAPTIVE_API AdaptivePrecision adaptive_router_get_precision(AdaptiveRouter* router);
 
 /**
  * Free an array of strings
