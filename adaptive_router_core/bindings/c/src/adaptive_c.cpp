@@ -72,7 +72,7 @@ static AdaptiveRouteResult* build_route_result(const RouteResponseT<Scalar>& res
   }
 
   result->cluster_id = response.cluster_id;
-  result->cluster_distance = static_cast<float>(response.cluster_distance);
+  result->cluster_distance = response.cluster_distance;
 
   result->alternatives_count = response.alternatives.size();
   if (result->alternatives_count > 0) {

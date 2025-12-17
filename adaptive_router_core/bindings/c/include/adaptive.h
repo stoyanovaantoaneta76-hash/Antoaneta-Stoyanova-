@@ -31,11 +31,11 @@ typedef struct AdaptiveRouter AdaptiveRouter;
  * Route result structure
  */
 typedef struct {
-  char* selected_model;      /**< Selected model ID (caller must free with adaptive_string_free) */
-  char** alternatives;       /**< Array of alternative model IDs */
-  size_t alternatives_count; /**< Number of alternatives */
-  int cluster_id;            /**< Assigned cluster ID */
-  float cluster_distance;    /**< Distance to cluster centroid */
+   char* selected_model;      /**< Selected model ID (caller must free with adaptive_string_free) */
+   char** alternatives;       /**< Array of alternative model IDs */
+   size_t alternatives_count; /**< Number of alternatives */
+   int cluster_id;            /**< Assigned cluster ID */
+   double cluster_distance;   /**< Distance to cluster centroid */
 } AdaptiveRouteResult;
 
 /**
