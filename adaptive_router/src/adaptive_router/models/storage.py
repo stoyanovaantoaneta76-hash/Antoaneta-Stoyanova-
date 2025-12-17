@@ -5,6 +5,8 @@ All profile components (cluster centers, scaler parameters, etc.) are
 strongly typed to catch data corruption early and provide better IDE support.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from adaptive_router.models.api import Model
@@ -111,8 +113,8 @@ class ProfileMetadata(BaseModel):
     # Core clustering parameters
     n_clusters: int = Field(..., gt=0, description="Number of clusters")
     embedding_model: str = Field(..., description="Embedding model name")
-    dtype: str = Field(
-        default="float32", description="Numeric dtype for cluster centers (float32 or float64)"
+    dtype: Literal["float32", "float64"] = Field(
+        default="float32", description="Numeric dtype for cluster centers"
     )
     silhouette_score: float | None = Field(
         default=None, ge=-1.0, le=1.0, description="Cluster quality metric"

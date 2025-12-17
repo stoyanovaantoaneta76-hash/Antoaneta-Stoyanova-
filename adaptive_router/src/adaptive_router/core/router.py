@@ -17,6 +17,8 @@ import warnings
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from sentence_transformers import SentenceTransformer
 
 from adaptive_router.loaders.local import LocalFileProfileLoader
@@ -294,12 +296,12 @@ class ModelRouter:
             request.prompt,
             convert_to_numpy=True,
         )
-        
+
         # Ensure embedding dtype matches router dtype (from profile)
-        import numpy as np
-        if self._dtype == 'float64' and embedding.dtype != np.float64:
+
+        if self._dtype == "float64" and embedding.dtype != np.float64:
             embedding = embedding.astype(np.float64)
-        elif self._dtype == 'float32' and embedding.dtype != np.float32:
+        elif self._dtype == "float32" and embedding.dtype != np.float32:
             embedding = embedding.astype(np.float32)
 
         # 2. Resolve cost preference

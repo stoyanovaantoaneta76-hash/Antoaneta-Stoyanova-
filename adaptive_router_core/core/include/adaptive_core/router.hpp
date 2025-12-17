@@ -56,7 +56,7 @@ public:
     };
 
     if (scores.size() > 1) {
-      int n = std::min(static_cast<int>(scores.size()) - 1, profile_.metadata.routing.max_alternatives);
+      size_t n = std::min(scores.size() - 1, static_cast<size_t>(profile_.metadata.routing.max_alternatives));
       auto alts = scores | std::views::drop(1) | std::views::take(n)
                         | std::views::transform(&ModelScore::model_id);
       resp.alternatives.assign(alts.begin(), alts.end());
