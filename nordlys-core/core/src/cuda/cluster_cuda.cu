@@ -1,4 +1,4 @@
-#ifdef ADAPTIVE_HAS_CUDA
+#ifdef NORDLYS_HAS_CUDA
 
 #include <nordlys_core/cuda/cluster_cuda.hpp>
 
@@ -386,4 +386,4 @@ std::pair<int, double> CudaClusterBackendT<double>::assign(const double* embeddi
   return {host_best_idx, host_best_dist};
 }
 
-#endif  // ADAPTIVE_HAS_CUDA
+#endif  // NORDLYS_HAS_CUDA
