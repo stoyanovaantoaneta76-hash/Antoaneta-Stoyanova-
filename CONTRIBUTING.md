@@ -1,11 +1,11 @@
 # Contributing to Nordlys
 
-Thank you for your interest in contributing to Nordlys! This guide will help you get started with contributing to the intelligent model routing engine.
+Thank you for your interest in contributing to Nordlys! This guide will help you get started with contributing to the intelligent mixture of models engine.
 
 ## Overview
 
-Nordlys is a sophisticated ML routing system with two main components:
-- **Python Package**: High-level ML API with routing algorithms
+Nordlys is a sophisticated ML selection system with two main components:
+- **Python Package**: High-level ML API with selection algorithms
 - **C++ Core**: High-performance inference engine with language bindings
 
 ## Prerequisites
@@ -207,7 +207,7 @@ nordlys/
 
 ### High Priority
 1. **Algorithm Improvements**
-   - Enhance routing accuracy
+   - Enhance selection accuracy
    - Optimize clustering algorithms
    - Add new features for model selection
 

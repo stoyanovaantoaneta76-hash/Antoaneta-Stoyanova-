@@ -4,9 +4,9 @@ Nordlys is an AI lab building a Mixture of Models. This repository contains the 
 
 ## What is Nordlys?
 
-Nordlys is an intelligent model routing system that:
+Nordlys is an intelligent model selection system that:
 - **Selects optimal LLMs** based on prompt analysis using ML clustering
-- **Optimizes costs** while maintaining quality through sophisticated routing algorithms
+- **Optimizes costs** while maintaining quality through sophisticated selection algorithms
 - **Supports multiple providers** (OpenAI, Anthropic, local models, etc.)
 - **Provides high-performance inference** with GPU acceleration
 

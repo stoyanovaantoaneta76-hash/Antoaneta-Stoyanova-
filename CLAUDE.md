@@ -6,11 +6,11 @@
 
 ## Overview
 
-The Nordlys Model Engine is a unified Python ML package that provides intelligent model processing for the Nordlys AI infrastructure. It uses advanced ML techniques including clustering algorithms and per-model performance optimization to process and manage AI models. The engine supports two deployment modes: Library (import and use directly in Python code) and FastAPI (HTTP API server with GPU-accelerated inference).
+The Nordlys Model Engine is a unified Python ML package that provides intelligent model selection for the Nordlys AI infrastructure. It uses advanced ML techniques including clustering algorithms and per-model performance optimization to select optimal models for requests. The engine supports two deployment modes: Library (import and use directly in Python code) and FastAPI (HTTP API server with GPU-accelerated inference).
 
 ## Key Features
 
-- **Advanced Model Processing**: UniRouter algorithm with K-means clustering and performance optimization
+- **Mixture of Models Selection**: ML-based selection algorithm with K-means clustering and performance optimization
 - **Flexible Deployment**: Python library import or FastAPI HTTP server
 - **Cost Optimization**: Balances performance vs. cost based on configurable preferences
 - **High-Performance API**: FastAPI framework with Hypercorn ASGI server, OpenAPI documentation
@@ -42,9 +42,9 @@ nordlys/  # Repository root (workspace root)
 ├── nordlys/                          # Core ML library package
 │   ├── __init__.py                           # Library exports for Python import
 │   ├── pyproject.toml                        # Library package configuration
-│   ├── core/                                 # Core ML processing components
+│   ├── core/                                 # Core ML selection components
 │   │   ├── __init__.py
-│   │   ├── router.py                         # ModelRouter - main processing logic
+│   │   ├── selector.py                       # ModelSelector - main selection logic
 │   │   ├── cluster_engine.py                 # ClusterEngine - K-means clustering
 │   │   └── feature_extractor.py              # FeatureExtractor - sentence transformers + TF-IDF
 
@@ -55,7 +55,7 @@ nordlys/  # Repository root (workspace root)
 │   │   ├── evaluation.py                     # Evaluation metrics models
 │   │   ├── health.py                         # Health check models
 │   │   ├── registry.py                       # Model registry models
-│   │   ├── routing.py                        # Processing decision models
+│   │   ├── selection.py                     # Selection decision models
 │   │   └── storage.py                        # Storage/profile models
 │   ├── utils/                                # Utility modules
 │   │   ├── __init__.py
@@ -68,8 +68,8 @@ nordlys/  # Repository root (workspace root)
 │       ├── integration/                      # Integration tests
 │       │   ├── test_api_endpoints.py
 │       │   ├── test_cost_optimization.py
-│       │   ├── test_model_processing_flows.py
-│       │   └── test_task_routing.py
+│       │   ├── test_model_selection_flows.py
+│       │   └── test_task_selection.py
 │       └── unit/                             # Unit tests
 │           ├── models/
 │           └── services/
@@ -119,7 +119,7 @@ FASTAPI_ACCESS_LOG=true          # Enable access logging
 FASTAPI_LOG_LEVEL=info           # Log level
 
 # Profile Storage Configuration (Modal Volume)
-PROFILE_PATH=/data/profile.json  # Path to router profile in Modal Volume
+PROFILE_PATH=/data/profile.json  # Path to selector profile in Modal Volume
 ```
 
 ### Optional Configuration
@@ -190,7 +190,7 @@ fastapi dev nordlys_app/nordlys_app/main.py
 - **Memory**: 8GB baseline memory allocation
 - **Scaling**: Automatically scales to 0 when idle (60-second timeout)
 - **Concurrency**: Handles up to 100 concurrent requests per container
-- **Storage**: Modal Volume at `/data` for router profile persistence
+- **Storage**: Modal Volume at `/data` for selector profile persistence
 - **Model Cache**: Modal Volume at `/root/.cache` for sentence-transformer models
 
 Access interactive API docs at `http://localhost:8000/docs`
@@ -284,7 +284,7 @@ make test-cov-html
 make test-config      # Configuration tests
 make test-services    # Service tests
 make test-models      # Model tests
-make test-routing     # Routing integration tests
+make test-selection    # Selection integration tests
 
 # Code quality
 make lint            # Check with ruff
@@ -404,15 +404,15 @@ The service exposes a FastAPI REST API that accepts model selection requests and
 
 ## Core Services
 
-### Model Router
+### Model Selector
 
-**File**: `nordlys/core/router.py`
+**File**: `nordlys/core/selector.py`
 
-The `ModelRouter` class is the main entry point for intelligent model selection:
+The `ModelSelector` class is the main entry point for intelligent model selection:
 
-- Cluster-based routing using UniRouter algorithm
-- Accepts `RoutingRequest` with prompt and cost preference
-- Returns `RoutingResponse` with selected model and reasoning
+- Cluster-based selection using mixture of models algorithm
+- Accepts `SelectionRequest` with prompt and cost preference
+- Returns `SelectionResponse` with selected model and reasoning
 - Uses pre-loaded cluster profiles from MinIO S3
 - Combines feature extraction, cluster assignment, and cost optimization
 - Supports multiple provider models with per-cluster error rates
@@ -478,9 +478,9 @@ Integration with external model registry service for model metadata:
 - Integrates registry client with fuzzy matching
 - Provides fallback strategies for unknown models
 
-## Routing Algorithm
+## Selection Algorithm
 
-### Cluster-Based Selection (UniRouter)
+### Cluster-Based Selection
 
 - **Algorithm**: K-means clustering of prompts based on semantic features
 - **Features**: Sentence transformer embeddings (384D) + TF-IDF features (5000D)
@@ -498,9 +498,9 @@ Integration with external model registry service for model metadata:
 ### Cost-Performance Trade-off
 
 - **Cost Preference**: λ parameter (0.0 = cheapest, 1.0 = most accurate)
-- **Routing Score**: Weighted combination of predicted accuracy and normalized cost
+- **Selection Score**: Weighted combination of predicted accuracy and normalized cost
 - **Formula**: `score = predicted_accuracy - λ * normalized_cost`
-- **Optimization**: Selects model with highest routing score for assigned cluster
+- **Optimization**: Selects model with highest score for assigned cluster
 
 ## Caching and Performance
 
@@ -514,7 +514,7 @@ Integration with external model registry service for model metadata:
 ### Storage Integration
 
 - **Modal Volumes**: Stores cluster profiles and model cache for persistence
-- **Profile Caching**: Router profile loaded once at service initialization
+- **Profile Caching**: Selector profile loaded once at service initialization
 - **Model Cache**: Sentence transformers cached in `/root/.cache` for fast startup
 - **Request Processing**: All computations done locally in-memory
 
@@ -693,11 +693,11 @@ modal cancel nordlys
 - Check available disk space for model cache (~500MB for all-MiniLM-L6-v2)
 - On macOS, CPU mode is used automatically (no CUDA required)
 
-**Routing errors**
+**Selection errors**
 
 - Verify input format matches ModelSelectionRequest schema
 - Check prompt length is reasonable (no hard limit, but very long prompts are slower)
-- Ensure router profile loaded correctly (check startup logs)
+- Ensure selector profile loaded correctly (check startup logs)
 - Enable debug logging: `DEBUG=true fastapi dev nordlys_app/nordlys_app/main.py`
 
 **Performance issues**
@@ -781,7 +781,7 @@ modal run nordlys -c "python -c 'import torch; print(torch.cuda.is_available())'
 ### Routing Quality
 
 - **Cost Savings**: 30-70% compared to always using most capable models
-- **Accuracy Retention**: >90% of optimal model selection vs. oracle routing
+- **Accuracy Retention**: >90% of optimal model selection vs. oracle selection
 - **Cluster Silhouette**: Typically 0.3-0.5 (good cluster separation)
 - **Per-Cluster Accuracy**: Varies by cluster, tracked in profile metadata
 
@@ -806,7 +806,7 @@ modal run nordlys -c "python -c 'import torch; print(torch.cuda.is_available())'
 **IMPORTANT**: When making changes to this service, always update documentation:
 
 1. **Update this CLAUDE.md** when:
-   - Adding new ML models or classification algorithms
+   - Adding new ML models or selection algorithms
    - Modifying API interfaces or request/response formats
    - Changing environment variables or configuration settings
    - Adding new providers, task types, or domain classifications
@@ -815,13 +815,13 @@ modal run nordlys -c "python -c 'import torch; print(torch.cuda.is_available())'
 
 2. **Update root CLAUDE.md** when:
    - Changing service ports, commands, or basic service description
-   - Modifying the service's role in the intelligent routing architecture
+   - Modifying the service's role in the intelligent mixture of models architecture
    - Adding new ML capabilities or performance characteristics
 
 3. **Update adaptive-docs/** when:
    - Adding new model selection features
    - Changing cost optimization algorithms
-   - Modifying provider integration or routing logic
+   - Modifying provider integration or selection logic
 
 ### Pull Request Process
 
