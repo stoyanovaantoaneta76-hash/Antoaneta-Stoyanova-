@@ -18,7 +18,7 @@ API_KEY_URL="https://nordlyslabs.com/api-platform/orgs"
 # Model override defaults (can be overridden by environment variables)
 # Use nordlys/hypernova to enable Nordlys model for optimal cost/performance
 DEFAULT_MODEL="nordlys/hypernova"
-DEFAULT_MODELS='["anthropic/claude-sonnet-4-5","anthropic/claude-4-5-haiku","anthropic/claude-opus-4-1-20250805","openai/gpt-5-codex","google/gemini-2-5-pro"]'
+DEFAULT_MODELS='["nordlys/hypernova"]'
 
 # ========================
 #       Utility Functions
@@ -321,9 +321,13 @@ add_env_to_shell_config() {
     if [ "$shell_type" = "fish" ]; then
       echo "set -x NORDLYS_API_KEY \"$api_key\"" >> "$config_file"
       echo "set -x NORDLYS_BASE_URL \"$API_BASE_URL\"" >> "$config_file"
+      echo "set -x GROK_MODEL \"$DEFAULT_MODEL\"" >> "$config_file"
+      echo "set -x GROK_BASE_URL \"$API_BASE_URL\"" >> "$config_file"
     else
       echo "export NORDLYS_API_KEY=\"$api_key\"" >> "$config_file"
       echo "export NORDLYS_BASE_URL=\"$API_BASE_URL\"" >> "$config_file"
+      echo "export GROK_MODEL=\"$DEFAULT_MODEL\"" >> "$config_file"
+      echo "export GROK_BASE_URL=\"$API_BASE_URL\"" >> "$config_file"
     fi
   fi
 
