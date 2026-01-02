@@ -49,7 +49,8 @@ create_config_backup() {
   local config_file="$1"
 
   if [ -f "$config_file" ]; then
-    local timestamp=$(date +"%Y%m%d_%H%M%S")
+    local timestamp
+    timestamp=$(date +"%Y%m%d_%H%M%S")
     local timestamped_backup="${config_file}.${timestamp}.bak"
 
     # Create timestamped backup
@@ -225,8 +226,7 @@ get_shell_config_file() {
 
 add_env_to_shell_config() {
   local api_key="$1"
-  local model="$2"
-  local base_url="$3"
+  local base_url="$2"
   local shell_type
   local config_file
 
@@ -243,76 +243,115 @@ add_env_to_shell_config() {
     log_info "Gemini environment variables already exist in $config_file, updating..."
 
     if [ "$shell_type" = "fish" ]; then
-      # Fish shell: update API key, base URL, and model
+      # Fish shell: update API key and base URL
       if [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS sed for Fish
         sed -i '' "s|set -x GEMINI_API_KEY.*|set -x GEMINI_API_KEY \"$api_key\"|" "$config_file"
         sed -i '' "s|set -x GOOGLE_GEMINI_BASE_URL.*|set -x GOOGLE_GEMINI_BASE_URL \"$base_url\"|" "$config_file"
-        sed -i '' "s|set -x GEMINI_MODEL.*|set -x GEMINI_MODEL \"$model\"|" "$config_file"
       else
         # Linux sed for Fish
         sed -i "s|set -x GEMINI_API_KEY.*|set -x GEMINI_API_KEY \"$api_key\"|" "$config_file"
         sed -i "s|set -x GOOGLE_GEMINI_BASE_URL.*|set -x GOOGLE_GEMINI_BASE_URL \"$base_url\"|" "$config_file"
-        sed -i "s|set -x GEMINI_MODEL.*|set -x GEMINI_MODEL \"$model\"|" "$config_file"
       fi
 
       # Add GOOGLE_GEMINI_BASE_URL if it doesn't exist in Fish config
       if ! grep -q "GOOGLE_GEMINI_BASE_URL" "$config_file" 2>/dev/null; then
         echo "set -x GOOGLE_GEMINI_BASE_URL \"$base_url\"" >>"$config_file"
       fi
-      # Add GEMINI_MODEL if it doesn't exist in Fish config
-      if ! grep -q "GEMINI_MODEL" "$config_file" 2>/dev/null; then
-        echo "set -x GEMINI_MODEL \"$model\"" >>"$config_file"
+      # Remove GEMINI_MODEL from Fish config if it exists (now in settings.json)
+      if grep -q "GEMINI_MODEL" "$config_file" 2>/dev/null; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+          sed -i '' "/set -x GEMINI_MODEL/d" "$config_file"
+        else
+          sed -i "/set -x GEMINI_MODEL/d" "$config_file"
+        fi
+        log_info "Removed GEMINI_MODEL from shell config (now in settings.json)"
       fi
     else
-      # POSIX shells (bash/zsh): update API key, base URL, and model
+      # POSIX shells (bash/zsh): update API key and base URL
       if [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS sed for bash/zsh
         sed -i '' "s|export GEMINI_API_KEY=.*|export GEMINI_API_KEY=\"$api_key\"|" "$config_file"
         sed -i '' "s|export GOOGLE_GEMINI_BASE_URL=.*|export GOOGLE_GEMINI_BASE_URL=\"$base_url\"|" "$config_file"
-        sed -i '' "s|export GEMINI_MODEL=.*|export GEMINI_MODEL=\"$model\"|" "$config_file"
       else
         # Linux sed for bash/zsh
         sed -i "s|export GEMINI_API_KEY=.*|export GEMINI_API_KEY=\"$api_key\"|" "$config_file"
         sed -i "s|export GOOGLE_GEMINI_BASE_URL=.*|export GOOGLE_GEMINI_BASE_URL=\"$base_url\"|" "$config_file"
-        sed -i "s|export GEMINI_MODEL=.*|export GEMINI_MODEL=\"$model\"|" "$config_file"
       fi
 
       # Add GOOGLE_GEMINI_BASE_URL if it doesn't exist in POSIX shell config
       if ! grep -q "GOOGLE_GEMINI_BASE_URL" "$config_file" 2>/dev/null; then
         echo "export GOOGLE_GEMINI_BASE_URL=\"$base_url\"" >>"$config_file"
       fi
-      # Add GEMINI_MODEL if it doesn't exist in POSIX shell config
-      if ! grep -q "GEMINI_MODEL" "$config_file" 2>/dev/null; then
-        echo "export GEMINI_MODEL=\"$model\"" >>"$config_file"
+      # Remove GEMINI_MODEL from POSIX shell config if it exists (now in settings.json)
+      if grep -q "export GEMINI_MODEL" "$config_file" 2>/dev/null; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+          sed -i '' "/export GEMINI_MODEL/d" "$config_file"
+        else
+          sed -i "/export GEMINI_MODEL/d" "$config_file"
+        fi
+        log_info "Removed GEMINI_MODEL from shell config (now in settings.json)"
       fi
     fi
   else
-    # Add new environment variables based on shell type
+    # Add new environment variables based on shell type (no GEMINI_MODEL - it's in settings.json)
     echo "" >>"$config_file"
-    echo "# Gemini CLI with Nordlys Model API Configuration (added by gemini-cli installer)" >>"$config_file"
+    echo "# Gemini CLI with NordlysProxy Configuration (added by gemini-cli installer)" >>"$config_file"
     if [ "$shell_type" = "fish" ]; then
       echo "set -x GEMINI_API_KEY \"$api_key\"" >>"$config_file"
       echo "set -x GOOGLE_GEMINI_BASE_URL \"$base_url\"" >>"$config_file"
-      echo "set -x GEMINI_MODEL \"$model\"" >>"$config_file"
     else
       echo "export GEMINI_API_KEY=\"$api_key\"" >>"$config_file"
       echo "export GOOGLE_GEMINI_BASE_URL=\"$base_url\"" >>"$config_file"
-      echo "export GEMINI_MODEL=\"$model\"" >>"$config_file"
     fi
   fi
 
   log_success "Environment variables added to $config_file"
-  if [ "$model" = "$DEFAULT_MODEL" ]; then
-    log_info "GEMINI_MODEL set to nordlys/hypernova for Nordlys model (default)"
-  else
-    log_info "GEMINI_MODEL set to: $model"
-  fi
+  log_info "Model configuration is in ~/.gemini/settings.json"
   if [ "$shell_type" = "fish" ]; then
     log_info "Restart your terminal or run 'source $config_file' to apply changes"
   else
     log_info "Run 'source $config_file' or restart your terminal to apply changes"
   fi
+}
+
+create_settings_json() {
+  local model="$1"
+  local settings_file="$CONFIG_DIR/settings.json"
+
+  log_info "Creating Gemini CLI settings at $settings_file"
+
+  # Create config directory if needed
+  ensure_dir_exists "$CONFIG_DIR"
+
+  # Backup existing settings
+  create_config_backup "$settings_file"
+
+  # Try jq first for proper merging, fallback to simple creation
+  if command -v jq &>/dev/null && [ -f "$settings_file" ]; then
+    # Merge with existing settings using jq
+    jq --arg model "$model" '
+      .model.name = $model |
+      .privacy.usageStatisticsEnabled = false
+    ' "$settings_file" > "${settings_file}.tmp" && mv "${settings_file}.tmp" "$settings_file"
+
+    log_success "Settings merged with existing configuration"
+  else
+    # Create new settings file (pure shell, no dependencies)
+    cat > "$settings_file" <<EOF
+{
+  "model": {
+    "name": "$model"
+  },
+  "privacy": {
+    "usageStatisticsEnabled": false
+  }
+}
+EOF
+    log_success "Settings file created"
+  fi
+
+  log_success "Settings saved to: $settings_file"
 }
 
 validate_model_override() {
@@ -381,11 +420,11 @@ configure_gemini() {
     echo ""
     echo "⚙️  Option 4: Manual configuration (Advanced users)"
     echo "   mkdir -p ~/.gemini"
-    echo "   export NORDLYS_API_KEY='your-api-key-here'"
     echo "   # Add to your shell config (~/.bashrc, ~/.zshrc, etc.):"
     echo "   echo 'export GEMINI_API_KEY=\"your-api-key-here\"' >> ~/.bashrc"
     echo "   echo 'export GOOGLE_GEMINI_BASE_URL=\"https://api.nordlyslabs.com\"' >> ~/.bashrc"
-    echo "   echo 'export GEMINI_MODEL=\"nordlys/hypernova\"' >> ~/.bashrc  # Set for Nordlys model"
+    echo "   # Create settings file:"
+    echo "   echo '{\"model\":{\"name\":\"nordlys/hypernova\"},\"privacy\":{\"usageStatisticsEnabled\":false}}' > ~/.gemini/settings.json"
     echo ""
     echo "🔗 Get your API key: $API_KEY_URL"
     exit 1
@@ -426,8 +465,11 @@ configure_gemini() {
   log_success "Gemini CLI configured for Nordlys successfully"
   log_info "Base URL: $base_url"
 
-  # Add environment variables to shell configuration with the constructed base URL
-  add_env_to_shell_config "$api_key" "$model" "$base_url"
+  # Add environment variables to shell configuration
+  add_env_to_shell_config "$api_key" "$base_url"
+
+  # Create settings.json for model and other preferences
+  create_settings_json "$model"
 }
 
 # ========================
@@ -449,6 +491,12 @@ verify_installation() {
   # Check if Gemini CLI can be found
   if ! command -v gemini &>/dev/null; then
     log_error "Gemini CLI installation verification failed"
+    return 1
+  fi
+
+  # Check if settings file exists
+  if [ ! -f "$CONFIG_DIR/settings.json" ]; then
+    log_error "Settings file not found at $CONFIG_DIR/settings.json"
     return 1
   fi
 
@@ -477,6 +525,7 @@ main() {
     echo "   gemini --version          # Check Gemini CLI installation"
     echo "   echo \$GEMINI_API_KEY      # Check API key environment variable"
     echo "   echo \$GOOGLE_GEMINI_BASE_URL  # Check base URL configuration"
+    echo "   cat ~/.gemini/settings.json    # Check model settings"
     echo ""
     echo "💡 Usage Examples:"
     echo "   gemini \"explain this code\""
@@ -487,9 +536,10 @@ main() {
     echo "   Dashboard: $API_KEY_URL"
     echo ""
     echo "💡 Pro Tips:"
-    echo "   • Your API key is automatically saved to your shell config"
-    echo "   • GEMINI_MODEL set to nordlys/hypernova for Nordlys model (recommended)"
-    echo "   • Set GEMINI_MODEL to another model ID if your team uses additional Nordlys models"
+    echo "   • API key saved to shell config (env var)"
+    echo "   • Model configured in ~/.gemini/settings.json"
+    echo "   • Model set to nordlys/hypernova for intelligent routing"
+    echo "   • Modify settings.json to customize model and preferences"
     echo ""
     echo "📖 Full Documentation: https://docs.nordlyslabs.com/developer-tools/gemini-cli"
     echo "🐛 Report Issues: https://github.com/Egham-7/nordlys/issues"
@@ -498,11 +548,15 @@ main() {
     log_error "❌ Installation verification failed"
     echo ""
     echo "🔧 Manual Setup (if needed):"
-    echo "   Configuration: Set environment variables in your shell config"
-    echo "   Expected variables:"
+    echo "   Configuration: Set environment variables and create settings file"
+    echo ""
+    echo "   # Add to your shell config (~/.bashrc, ~/.zshrc, etc.):"
     echo '   export GEMINI_API_KEY="your-nordlys-api-key"'
     echo '   export GOOGLE_GEMINI_BASE_URL="https://api.nordlyslabs.com"'
-    echo '   export GEMINI_MODEL="nordlys/hypernova"  # Nordlys model'
+    echo ""
+    echo "   # Create settings file:"
+    echo '   mkdir -p ~/.gemini'
+    echo '   echo '"'"'{"model":{"name":"nordlys/hypernova"},"privacy":{"usageStatisticsEnabled":false}}'"'"' > ~/.gemini/settings.json'
     echo ""
     echo "🆘 Get help: https://docs.nordlyslabs.com/troubleshooting"
     exit 1
