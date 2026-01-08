@@ -63,10 +63,12 @@ FetchContent_MakeAvailable(simsimd)
 FetchContent_Declare(
   usearch
   GIT_REPOSITORY https://github.com/unum-cloud/usearch.git
-  GIT_TAG        v2.16.5
+  GIT_TAG        v2.16.8
   GIT_SHALLOW    TRUE
   SYSTEM
 )
+# Workaround for older cmake_minimum_required in USearch
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
 set(USEARCH_BUILD_TEST OFF CACHE BOOL "" FORCE)
 set(USEARCH_BUILD_BENCHMARK OFF CACHE BOOL "" FORCE)
 set(USEARCH_USE_OPENMP OFF CACHE BOOL "" FORCE)
