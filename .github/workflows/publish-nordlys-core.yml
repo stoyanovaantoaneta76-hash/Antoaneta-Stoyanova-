@@ -45,6 +45,9 @@ jobs:
           fi
           echo "Version verified: $VERSION"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.1
         env:
@@ -105,6 +108,9 @@ jobs:
             exit 1
           fi
           echo "Version sync verified: CPU=$CPU_VERSION, CUDA=$CUDA_VERSION"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.1
