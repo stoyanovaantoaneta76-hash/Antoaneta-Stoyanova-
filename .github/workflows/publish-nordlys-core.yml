@@ -45,9 +45,6 @@ jobs:
           fi
           echo "Version verified: $VERSION"
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.1
         env:
@@ -64,6 +61,7 @@ jobs:
           CIBW_ENVIRONMENT: "NORDLYS_ENABLE_CUDA=OFF"
         with:
           package-dir: ./nordlys-core/bindings/python
+          extras: uv
 
       - uses: actions/upload-artifact@v6
         with:
@@ -109,9 +107,6 @@ jobs:
           fi
           echo "Version sync verified: CPU=$CPU_VERSION, CUDA=$CUDA_VERSION"
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.1
         env:
@@ -148,6 +143,7 @@ jobs:
             -w {dest_dir} {wheel}
         with:
           package-dir: ./nordlys-core-cu12
+          extras: uv
 
       - uses: actions/upload-artifact@v6
         with:
