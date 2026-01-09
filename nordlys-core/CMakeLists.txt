@@ -61,15 +61,8 @@ set(SIMSIMD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(SIMSIMD_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(simsimd)
 
-# Suppress MSVC unreachable code warning in SimSIMD (external dependency)
-# SimSIMD is an INTERFACE library, so we must use INTERFACE (not PRIVATE)
-if(TARGET simsimd)
-  if(MSVC)
-    target_compile_options(simsimd INTERFACE /wd4702)
-  else()
-    target_compile_options(simsimd INTERFACE -Wno-unreachable-code)
-  endif()
-endif()
+# Note: SimSIMD warning suppression moved to nordlys_core target (core/CMakeLists.txt)
+# because INTERFACE properties don't suppress warnings in SYSTEM headers on MSVC
 
 # USearch (CPU vector search with SimSIMD backend)
 FetchContent_Declare(

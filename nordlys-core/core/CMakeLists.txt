@@ -41,6 +41,12 @@ endif()
 # Apply common compile options
 nordlys_target_compile_options(nordlys_core)
 
+# Suppress MSVC unreachable code warning in SimSIMD headers (external dependency)
+# Even though SimSIMD is marked as SYSTEM, MSVC still treats warnings as errors
+if(MSVC)
+  target_compile_options(nordlys_core PRIVATE /wd4702)
+endif()
+
 # CUDA acceleration (optional)
 # The CUDA backend is decoupled - it doesn't compile with usearch headers
 # due to #ifndef __CUDACC__ guards in cluster_backend.hpp
