@@ -1,13 +1,15 @@
 from conan import ConanFile
 from conan.tools.cmake import cmake_layout
+from pathlib import Path
 
 
 class NordlysCoreConan(ConanFile):
     name = "nordlys_core"
 
     def set_version(self):
-        # Hardcoded version to match pyproject.toml
-        self.version = "0.1.2"
+        # Read version from VERSION file (single source of truth)
+        version_file = Path(__file__).parent / "VERSION"
+        self.version = version_file.read_text().strip()
 
     settings = "os", "compiler", "build_type", "arch"
     generators = "CMakeToolchain", "CMakeDeps"
