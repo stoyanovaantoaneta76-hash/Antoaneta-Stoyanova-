@@ -11,7 +11,6 @@ import logging
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -26,9 +25,7 @@ from nordlys.clustering import (
     compute_cluster_metrics,
 )
 from nordlys.reduction import Reducer
-
-if TYPE_CHECKING:
-    from nordlys_core_ext import Router as CoreRouter
+from nordlys_core_ext import Nordlys32, Nordlys64, NordlysCheckpoint
 
 
 logger = logging.getLogger(__name__)
@@ -73,19 +70,6 @@ class ModelConfig(BaseModel):
 
 
 @dataclass
-class Alternative:
-    """Alternative model option with score.
-
-    Attributes:
-        model_id: Model identifier (e.g., "openai/gpt-4")
-        score: Combined accuracy-cost score (higher is better)
-    """
-
-    model_id: str
-    score: float
-
-
-@dataclass
 class RouteResult:
     """Result of routing a prompt to a model.
 
@@ -93,13 +77,13 @@ class RouteResult:
         model_id: Selected model identifier
         cluster_id: Assigned cluster ID
         cluster_distance: Distance to cluster centroid
-        alternatives: Ranked list of alternative models
+        alternatives: Ranked list of alternative model IDs (best to worst)
     """
 
     model_id: str
     cluster_id: int
     cluster_distance: float
-    alternatives: list[Alternative] = field(default_factory=list)
+    alternatives: list[str] = field(default_factory=list)
 
 
 def _get_device() -> str:
@@ -152,8 +136,7 @@ class Nordlys:
     def __init__(
         self,
         models: list[ModelConfig],
-        embedding_model: str
-        | SentenceTransformer = "sentence-transformers/all-MiniLM-L6-v2",
+        embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
         umap_model: Reducer | None = None,
         cluster_model: Clusterer | None = None,
         nr_clusters: int = 20,
@@ -164,32 +147,25 @@ class Nordlys:
 
         Args:
             models: List of model configurations with costs
-            embedding_model: Sentence transformer model name or instance
+            embedding_model: Hugging Face model ID (e.g., "sentence-transformers/all-MiniLM-L6-v2")
             umap_model: Optional dimensionality reducer (e.g., UMAPReducer, PCAReducer)
             cluster_model: Clustering algorithm (default: KMeansClusterer)
             nr_clusters: Number of clusters (used if cluster_model is None)
             random_state: Random seed for reproducibility
             allow_trust_remote_code: Allow remote code execution for embedding model
         """
+        # C++ core (initialized on load or after fit) - set early to avoid __del__ errors
+        self._core_engine: Nordlys32 | Nordlys64 | None = None
+
         if not models:
             raise ValueError("At least one model configuration is required")
 
         self._models = models
         self._model_ids = [m.id for m in models]
 
-        # Embedding model
-        self._embedding_model_name = (
-            embedding_model
-            if isinstance(embedding_model, str)
-            else embedding_model.model_card_data.model_name
-            if hasattr(embedding_model, "model_card_data")
-            else "custom"
-        )
-        self._embedding_model: SentenceTransformer | None = (
-            embedding_model
-            if isinstance(embedding_model, SentenceTransformer)
-            else None
-        )
+        # Embedding model - lazy loaded on first use
+        self._embedding_model_name = embedding_model
+        self._embedding_model: SentenceTransformer | None = None
         self._allow_trust_remote_code = allow_trust_remote_code
 
         # Reducer (optional)
@@ -214,18 +190,7 @@ class Nordlys:
         self._metrics: ClusterMetrics | None = None
         self._model_accuracies: dict[int, dict[str, float]] | None = None
         self._is_fitted = False
-
-        # C++ core (initialized on load or after fit)
-        self._core_router: CoreRouter | None = None
         self._dtype = "float32"
-
-    def __del__(self) -> None:
-        """Cleanup router resources."""
-        if hasattr(self, "_core_router") and self._core_router is not None:
-            try:
-                self._core_router.cleanup()
-            except (AttributeError, Exception):
-                pass
 
     def _load_embedding_model(self) -> SentenceTransformer:
         """Load the embedding model lazily."""
@@ -319,22 +284,29 @@ class Nordlys:
         logger.info(f"Clustering complete: {self._metrics}")
 
         # Step 5: Compute per-cluster accuracy for each model
-        self._model_accuracies = {}
-        for cluster_id in range(self._clusterer.n_clusters_):
-            mask = self._labels == cluster_id
-            if not mask.any():
-                continue
-
-            cluster_accuracies = {}
-            for model_id in self._model_ids:
-                accuracy = df.loc[mask, model_id].mean()
-                cluster_accuracies[model_id] = float(accuracy)
-
-            self._model_accuracies[cluster_id] = cluster_accuracies
+        self._model_accuracies = {
+            cluster_id: {
+                model_id: float(df.loc[mask, model_id].mean())
+                for model_id in self._model_ids
+            }
+            for cluster_id in range(self._clusterer.n_clusters_)
+            if (mask := self._labels == cluster_id).any()
+        }
 
         self._is_fitted = True
-        logger.info("Nordlys fitting complete")
 
+        # Step 6: Initialize C++ core engine - required for routing
+        logger.info("Initializing C++ core engine...")
+        checkpoint = self._to_checkpoint()
+        try:
+            if self._dtype == "float32":
+                self._core_engine = Nordlys32.from_checkpoint(checkpoint)
+            else:
+                self._core_engine = Nordlys64.from_checkpoint(checkpoint)
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize C++ core engine: {e}") from e
+
+        logger.info("Nordlys fitting complete")
         return self
 
     def fit_transform(
@@ -385,7 +357,7 @@ class Nordlys:
         prompt: str,
         cost_bias: float = 0.5,
     ) -> RouteResult:
-        """Route a prompt to the best model.
+        """Route a prompt to the best model using C++ core engine.
 
         Args:
             prompt: The text prompt to route
@@ -395,62 +367,8 @@ class Nordlys:
             RouteResult with selected model and alternatives
         """
         self._check_is_fitted()
+        assert self._core_engine is not None
 
-        # Use C++ core if available (faster)
-        if self._core_router is not None:
-            return self._route_with_core(prompt, cost_bias)
-
-        # Fall back to Python implementation
-        return self._route_python(prompt, cost_bias)
-
-    def _route_python(self, prompt: str, cost_bias: float) -> RouteResult:
-        """Python implementation of routing."""
-        # Compute embedding
-        embedding = self._compute_embeddings([prompt])[0]
-
-        # Apply reducer if fitted
-        if self._reducer is not None:
-            reduced = self._reducer.transform(embedding.reshape(1, -1))[0]
-        else:
-            reduced = embedding
-
-        # Find nearest cluster (centroids guaranteed set after _check_is_fitted)
-        assert self._centroids is not None
-        assert self._model_accuracies is not None
-        distances = np.linalg.norm(self._centroids - reduced, axis=1)
-        cluster_id = int(np.argmin(distances))
-        cluster_distance = float(distances[cluster_id])
-
-        # Score models for this cluster
-        cluster_accuracies = self._model_accuracies.get(cluster_id, {})
-        scored_models = self._score_models(cluster_accuracies, cost_bias)
-
-        if not scored_models:
-            # Fallback to cheapest model
-            sorted_by_cost = sorted(self._models, key=lambda m: m.cost_average)
-            return RouteResult(
-                model_id=sorted_by_cost[0].id,
-                cluster_id=cluster_id,
-                cluster_distance=cluster_distance,
-                alternatives=[],
-            )
-
-        # Best model is first
-        best = scored_models[0]
-        alternatives = [
-            Alternative(model_id=m[0], score=m[1]) for m in scored_models[1:]
-        ]
-
-        return RouteResult(
-            model_id=best[0],
-            cluster_id=cluster_id,
-            cluster_distance=cluster_distance,
-            alternatives=alternatives,
-        )
-
-    def _route_with_core(self, prompt: str, cost_bias: float) -> RouteResult:
-        """Route using C++ core."""
-        assert self._core_router is not None
         # Compute embedding
         embedding = self._compute_embeddings([prompt])[0]
 
@@ -460,18 +378,13 @@ class Nordlys:
             embedding = np.ascontiguousarray(embedding, dtype=target_dtype)
 
         # Route using C++ core
-        response = self._core_router.route(embedding, cost_bias, [])
-
-        alternatives = [
-            Alternative(model_id=m, score=0.0)  # C++ doesn't return scores
-            for m in response.alternatives
-        ]
+        response = self._core_engine.route(embedding, cost_bias, [])
 
         return RouteResult(
             model_id=response.selected_model,
             cluster_id=response.cluster_id,
             cluster_distance=float(response.cluster_distance),
-            alternatives=alternatives,
+            alternatives=list(response.alternatives),
         )
 
     def route_batch(
@@ -489,41 +402,6 @@ class Nordlys:
             List of RouteResults
         """
         return [self.route(p, cost_bias) for p in prompts]
-
-    def _score_models(
-        self,
-        cluster_accuracies: dict[str, float],
-        cost_bias: float,
-    ) -> list[tuple[str, float]]:
-        """Score and rank models for a cluster.
-
-        Score = accuracy * cost_bias - normalized_cost * (1 - cost_bias)
-
-        Higher cost_bias = prefer accuracy
-        Lower cost_bias = prefer cheaper models
-        """
-        if not cluster_accuracies:
-            return []
-
-        # Normalize costs
-        costs = {m.id: m.cost_average for m in self._models}
-        max_cost = max(costs.values()) if costs else 1.0
-        min_cost = min(costs.values()) if costs else 0.0
-        cost_range = max_cost - min_cost if max_cost > min_cost else 1.0
-
-        scored = []
-        for model_id in self._model_ids:
-            accuracy = cluster_accuracies.get(model_id, 0.5)
-            cost = costs.get(model_id, max_cost)
-            normalized_cost = (cost - min_cost) / cost_range
-
-            # Score: higher is better
-            score = accuracy * cost_bias - normalized_cost * (1 - cost_bias)
-            scored.append((model_id, score))
-
-        # Sort by score descending
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return scored
 
     def _check_is_fitted(self) -> None:
         """Check if model is fitted."""
@@ -570,11 +448,10 @@ class Nordlys:
         self._check_is_fitted()
         assert self._centroids is not None
 
-        clusters = []
-        for cluster_id in range(len(self._centroids)):
-            clusters.append(self.get_cluster_info(cluster_id))
-
-        return clusters
+        return [
+            self.get_cluster_info(cluster_id)
+            for cluster_id in range(len(self._centroids))
+        ]
 
     def get_metrics(self) -> ClusterMetrics:
         """Get clustering metrics.
@@ -649,100 +526,80 @@ class Nordlys:
     def save(self, path: str | Path) -> None:
         """Save the fitted model to a file.
 
-        Supports JSON (.json) and MessagePack (.msgpack) formats.
+        Supports both JSON (.json) and MessagePack (.msgpack) formats.
 
         Args:
-            path: Output file path
-
-        Raises:
-            RuntimeError: If model is not fitted
+            path: Output path (extension determines format)
         """
         self._check_is_fitted()
 
         path = Path(path)
-        profile = self._to_profile()
+        checkpoint = self._to_checkpoint()
 
         if path.suffix.lower() == ".msgpack":
-            self._save_msgpack(profile, path)
+            checkpoint.to_msgpack_file(str(path))
         else:
-            self._save_json(profile, path)
+            checkpoint.to_json_file(str(path))
 
         logger.info(f"Saved Nordlys model to {path}")
 
-    def _to_profile(self) -> dict[str, Any]:
-        """Convert fitted state to RouterProfile dict format."""
+    def _to_checkpoint(self) -> NordlysCheckpoint:
+        """Convert fitted state to NordlysCheckpoint."""
         assert self._centroids is not None
         assert self._model_accuracies is not None
         assert self._metrics is not None
-        # Build models list with error rates
-        models = []
-        for model_config in self._models:
-            error_rates = []
-            for cluster_id in range(len(self._centroids)):
-                accuracy = self._model_accuracies.get(cluster_id, {}).get(
-                    model_config.id, 0.5
-                )
-                error_rates.append(1.0 - accuracy)
 
-            parts = model_config.id.split("/", 1)
-            provider = parts[0] if len(parts) > 1 else "unknown"
-            model_name = parts[1] if len(parts) > 1 else model_config.id
+        centroids = self._centroids
+        model_accuracies = self._model_accuracies
+        n_clusters = len(centroids)
 
-            models.append(
-                {
-                    "provider": provider,
-                    "model_name": model_name,
-                    "cost_per_1m_input_tokens": model_config.cost_input,
-                    "cost_per_1m_output_tokens": model_config.cost_output,
-                    "error_rates": error_rates,
-                }
-            )
+        # Build models list with error rates (only model_id, no provider/model_name split)
+        models = [
+            {
+                "model_id": model_config.id,
+                "cost_per_1m_input_tokens": model_config.cost_input,
+                "cost_per_1m_output_tokens": model_config.cost_output,
+                "error_rates": [
+                    1.0 - model_accuracies.get(cluster_id, {}).get(model_config.id, 0.5)
+                    for cluster_id in range(n_clusters)
+                ],
+            }
+            for model_config in self._models
+        ]
 
-        # Cluster centers (use reduced if available, else full embeddings)
-        centers = self._centroids.tolist()
-
-        return {
-            "cluster_centers": {
-                "n_clusters": len(centers),
-                "feature_dim": len(centers[0]) if centers else 0,
-                "cluster_centers": centers,
-            },
+        # New optimized checkpoint format (v2.0)
+        checkpoint_dict = {
+            "version": "2.0",
+            "cluster_centers": centroids.tolist(),
             "models": models,
-            "metadata": {
-                "n_clusters": len(centers),
-                "embedding_model": self._embedding_model_name,
+            "embedding": {
+                "model": self._embedding_model_name,
                 "dtype": self._dtype,
-                "silhouette_score": self._metrics.silhouette_score
-                if self._metrics
-                else 0.0,
-                "allow_trust_remote_code": self._allow_trust_remote_code,
-                "clustering": {
-                    "max_iter": 300,
-                    "random_state": self._random_state,
-                    "n_init": 10,
-                    "algorithm": "lloyd",
-                    "normalization_strategy": "l2",
-                    "n_iter": 0,
-                },
-                "routing": {
-                    "lambda_min": 0.0,
-                    "lambda_max": 2.0,
-                    "default_cost_preference": 0.5,
-                },
+                "trust_remote_code": self._allow_trust_remote_code,
+            },
+            "clustering": {
+                "n_clusters": n_clusters,
+                "random_state": self._random_state,
+                "max_iter": 300,
+                "n_init": 10,
+                "algorithm": "lloyd",
+                "normalization": "l2",
+            },
+            "routing": {
+                "cost_bias_min": 0.0,
+                "cost_bias_max": 1.0,
+                "default_cost_bias": 0.5,
+                "max_alternatives": 5,
+            },
+            "metrics": {
+                "n_samples": self._metrics.n_samples,
+                "cluster_sizes": self._metrics.cluster_sizes,
+                "silhouette_score": self._metrics.silhouette_score,
+                "inertia": self._metrics.inertia,
             },
         }
 
-    def _save_json(self, profile: dict[str, Any], path: Path) -> None:
-        """Save profile as JSON."""
-        with open(path, "w") as f:
-            json.dump(profile, f, indent=2)
-
-    def _save_msgpack(self, profile: dict[str, Any], path: Path) -> None:
-        """Save profile as MessagePack using C++ core."""
-        from nordlys_core_ext import RouterProfile as CppRouterProfile
-
-        cpp_profile = CppRouterProfile.from_json_string(json.dumps(profile))
-        cpp_profile.to_msgpack_file(str(path))
+        return NordlysCheckpoint.from_json_string(json.dumps(checkpoint_dict))
 
     @classmethod
     def load(
@@ -760,95 +617,79 @@ class Nordlys:
         path = Path(path)
 
         if path.suffix.lower() == ".msgpack":
-            profile = cls._load_profile_msgpack(path)
+            checkpoint = NordlysCheckpoint.from_msgpack_file(str(path))
         else:
-            profile = cls._load_profile_json(path)
+            checkpoint = NordlysCheckpoint.from_json_file(str(path))
 
-        return cls._from_profile(profile, models)
-
-    @staticmethod
-    def _load_profile_json(path: Path) -> dict[str, Any]:
-        """Load profile from JSON."""
-        with open(path) as f:
-            return json.load(f)
-
-    @staticmethod
-    def _load_profile_msgpack(path: Path) -> dict[str, Any]:
-        """Load profile from MessagePack."""
-        from nordlys_core_ext import RouterProfile as CppRouterProfile
-
-        cpp_profile = CppRouterProfile.from_msgpack_file(str(path))
-        return json.loads(cpp_profile.to_json_string())
+        return cls._from_checkpoint(checkpoint, models)
 
     @classmethod
-    def _from_profile(
+    def _from_checkpoint(
         cls,
-        profile: dict[str, Any],
+        checkpoint: NordlysCheckpoint,
         models: list[ModelConfig] | None = None,
     ) -> "Nordlys":
-        """Create Nordlys instance from profile dict."""
-        metadata = profile["metadata"]
-
-        # Extract or create model configs
+        """Create Nordlys instance from NordlysCheckpoint."""
+        # Extract model configs from checkpoint if not provided
         if models is None:
-            models = []
-            for m in profile["models"]:
-                model_id = f"{m['provider']}/{m['model_name']}"
-                models.append(
-                    ModelConfig(
-                        id=model_id,
-                        cost_input=m["cost_per_1m_input_tokens"],
-                        cost_output=m["cost_per_1m_output_tokens"],
-                    )
+            models = [
+                ModelConfig(
+                    id=m.model_id,
+                    cost_input=m.cost_per_1m_input_tokens,
+                    cost_output=m.cost_per_1m_output_tokens,
                 )
+                for m in checkpoint.models
+            ]
 
-        # Create instance
+        # Create instance using new checkpoint structure
         instance = cls(
             models=models,
-            embedding_model=metadata["embedding_model"],
-            nr_clusters=metadata["n_clusters"],
-            random_state=metadata.get("clustering", {}).get("random_state", 42),
-            allow_trust_remote_code=metadata.get("allow_trust_remote_code", False),
+            embedding_model=checkpoint.embedding.model,
+            nr_clusters=checkpoint.clustering.n_clusters,
+            random_state=checkpoint.clustering.random_state,
+            allow_trust_remote_code=checkpoint.embedding.trust_remote_code,
         )
 
-        # Restore fitted state
-        centers = profile["cluster_centers"]["cluster_centers"]
-        instance._centroids = np.array(centers)
-        instance._dtype = metadata.get("dtype", "float32")
+        # Initialize C++ core - this is the source of truth for all routing
+        if checkpoint.embedding.dtype == "float32":
+            instance._core_engine = Nordlys32.from_checkpoint(checkpoint)
+        else:
+            instance._core_engine = Nordlys64.from_checkpoint(checkpoint)
 
-        # Restore model accuracies from error rates
-        instance._model_accuracies = {}
-        n_clusters = len(centers)
-        for cluster_id in range(n_clusters):
-            cluster_acc = {}
-            for m in profile["models"]:
-                model_id = f"{m['provider']}/{m['model_name']}"
-                error_rate = m["error_rates"][cluster_id]
-                cluster_acc[model_id] = 1.0 - error_rate
-            instance._model_accuracies[cluster_id] = cluster_acc
+        # Populate Python-side fitted state from checkpoint
+        instance._dtype = checkpoint.embedding.dtype
+        instance._centroids = np.asarray(
+            checkpoint.cluster_centers,
+            dtype=np.float32 if checkpoint.embedding.dtype == "float32" else np.float64,
+        )
 
-        # Create dummy labels/embeddings/metrics for compatibility
-        instance._labels = np.zeros(1, dtype=np.int32)
-        instance._embeddings = np.zeros((1, len(centers[0]) if centers else 1))
+        # Build model_accuracies from checkpoint.models error_rates
+        # Structure: {cluster_id: {model_id: accuracy}}
+        instance._model_accuracies = {
+            cluster_id: {
+                model.model_id: 1.0 - model.error_rates[cluster_id]
+                for model in checkpoint.models
+            }
+            for cluster_id in range(checkpoint.clustering.n_clusters)
+        }
+
+        # Restore metrics from checkpoint (all fields may be None)
         instance._metrics = ClusterMetrics(
-            silhouette_score=metadata.get("silhouette_score", 0.0),
-            n_clusters=n_clusters,
-            n_samples=0,
-            cluster_sizes=[0] * n_clusters,
+            silhouette_score=checkpoint.metrics.silhouette_score,
+            n_clusters=checkpoint.clustering.n_clusters,
+            n_samples=checkpoint.metrics.n_samples,
+            cluster_sizes=checkpoint.metrics.cluster_sizes,
+            inertia=checkpoint.metrics.inertia,
         )
 
-        # Initialize C++ core for fast routing
-        try:
-            from nordlys_core_ext import Router as CoreRouter
-
-            profile_json = json.dumps(profile)
-            instance._core_router = CoreRouter.from_json_string(profile_json)
-            logger.info("C++ core initialized for fast routing")
-        except (ImportError, Exception) as e:
-            logger.warning(f"C++ core not available, using Python routing: {e}")
-            instance._core_router = None
+        # These cannot be restored from checkpoint (require original training data)
+        instance._labels = None
+        instance._embeddings = None
+        instance._reduced_embeddings = None
 
         instance._is_fitted = True
+
+        logger.info(f"Loaded checkpoint with C++ core ({checkpoint.embedding.dtype})")
         return instance
 
     def __repr__(self) -> str:

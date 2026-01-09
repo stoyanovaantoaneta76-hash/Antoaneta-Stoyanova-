@@ -31,7 +31,7 @@ Usage:
 # Main API
 # ============================================================================
 
-from nordlys.nordlys import Nordlys, ModelConfig, RouteResult, Alternative
+from nordlys.nordlys import Nordlys, ModelConfig, RouteResult
 
 # Reduction components
 from nordlys import reduction
@@ -39,18 +39,34 @@ from nordlys import reduction
 # Clustering components
 from nordlys import clustering
 
+# C++ Core types
+from nordlys_core_ext import (
+    NordlysCheckpoint,
+    TrainingMetrics,
+    EmbeddingConfig,
+    ClusteringConfig,
+    RoutingConfig,
+    ModelFeatures,
+)
+
 # ============================================================================
 # Package metadata
 # ============================================================================
 
-__version__ = "0.2.0"
+__version__ = "0.1.4"
 
 __all__ = [
     # Main API
     "Nordlys",
     "ModelConfig",
     "RouteResult",
-    "Alternative",
+    # C++ Core types
+    "NordlysCheckpoint",
+    "TrainingMetrics",
+    "EmbeddingConfig",
+    "ClusteringConfig",
+    "RoutingConfig",
+    "ModelFeatures",
     # Modules
     "reduction",
     "clustering",

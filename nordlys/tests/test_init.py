@@ -64,6 +64,11 @@ class TestPackageMetadata:
             "ModelConfig",
             "RouteResult",
             "Alternative",
+            "NordlysCheckpoint",
+            "CheckpointMetadata",
+            "ClusteringConfig",
+            "RoutingConfig",
+            "ModelFeatures",
             "reduction",
             "clustering",
         }

@@ -5,90 +5,91 @@
 
 #include "nordlys.h"
 
-// Test profile JSON for creating valid routers
+// Test profile JSON for creating valid routers (v2.0 format)
 static const char* kTestProfileJson = R"({
-  "metadata": {
-    "n_clusters": 3,
-    "embedding_model": "test-model",
-    "silhouette_score": 0.85,
-    "clustering": {
-      "n_init": 10,
-      "algorithm": "lloyd"
-    },
-    "routing": {
-      "lambda_min": 0.0,
-      "lambda_max": 2.0,
-      "max_alternatives": 2
-    }
-  },
-  "cluster_centers": {
-    "n_clusters": 3,
-    "feature_dim": 4,
-    "cluster_centers": [
-      [1.0, 0.0, 0.0, 0.0],
-      [0.0, 1.0, 0.0, 0.0],
-      [0.0, 0.0, 1.0, 0.0]
-    ]
-  },
+  "version": "2.0",
+  "cluster_centers": [
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0]
+  ],
   "models": [
     {
-      "provider": "provider1",
-      "model_name": "gpt-4",
+      "model_id": "provider1/gpt-4",
       "cost_per_1m_input_tokens": 30.0,
       "cost_per_1m_output_tokens": 60.0,
       "error_rates": [0.01, 0.02, 0.015]
     },
     {
-      "provider": "provider2",
-      "model_name": "llama",
+      "model_id": "provider2/llama",
       "cost_per_1m_input_tokens": 0.3,
       "cost_per_1m_output_tokens": 0.6,
       "error_rates": [0.05, 0.06, 0.055]
     }
-  ]
+  ],
+  "embedding": {
+    "model": "test-model",
+    "dtype": "float32",
+    "trust_remote_code": false
+  },
+  "clustering": {
+    "n_clusters": 3,
+    "random_state": 42,
+    "max_iter": 300,
+    "n_init": 10,
+    "algorithm": "lloyd",
+    "normalization": "l2"
+  },
+  "routing": {
+    "cost_bias_min": 0.0,
+    "cost_bias_max": 1.0
+  },
+  "metrics": {
+    "silhouette_score": 0.85
+  }
 })";
 
 static const char* kTestProfileJsonFloat64 = R"({
-  "metadata": {
-    "n_clusters": 3,
-    "embedding_model": "test-model",
-    "dtype": "float64",
-    "silhouette_score": 0.85,
-    "clustering": {
-      "n_init": 10,
-      "algorithm": "lloyd"
-    },
-    "routing": {
-      "lambda_min": 0.0,
-      "lambda_max": 2.0,
-      "max_alternatives": 2
-    }
-  },
-  "cluster_centers": {
-    "n_clusters": 3,
-    "feature_dim": 4,
-    "cluster_centers": [
-      [1.0, 0.0, 0.0, 0.0],
-      [0.0, 1.0, 0.0, 0.0],
-      [0.0, 0.0, 1.0, 0.0]
-    ]
-  },
+  "version": "2.0",
+  "cluster_centers": [
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0]
+  ],
   "models": [
     {
-      "provider": "provider1",
-      "model_name": "gpt-4",
+      "model_id": "provider1/gpt-4",
       "cost_per_1m_input_tokens": 30.0,
       "cost_per_1m_output_tokens": 60.0,
       "error_rates": [0.01, 0.02, 0.015]
     },
     {
-      "provider": "provider2",
-      "model_name": "llama",
+      "model_id": "provider2/llama",
       "cost_per_1m_input_tokens": 0.3,
       "cost_per_1m_output_tokens": 0.6,
       "error_rates": [0.05, 0.06, 0.055]
     }
-  ]
+  ],
+  "embedding": {
+    "model": "test-model",
+    "dtype": "float64",
+    "trust_remote_code": false
+  },
+  "clustering": {
+    "n_clusters": 3,
+    "random_state": 42,
+    "max_iter": 300,
+    "n_init": 10,
+    "algorithm": "lloyd",
+    "normalization": "l2"
+  },
+  "routing": {
+    "cost_bias_min": 0.0,
+    "cost_bias_max": 1.0
+  },
+  "metrics": {
+    "silhouette_score": 0.85
+  }
 })";
 
 class CFFITest : public ::testing::Test {
@@ -132,14 +133,14 @@ TEST_F(CFFITest, SingleRouteReturnsValidResult) {
   std::vector<float> embedding = {0.95f, 0.05f, 0.0f, 0.0f};
 
   NordlysErrorCode error;
-  NordlysRouteResult32* result = nordlys_router_route_f32(
-      router_, embedding.data(), embedding_dim, 0.5f, &error);
+  NordlysRouteResult32* result
+      = nordlys_router_route_f32(router_, embedding.data(), embedding_dim, 0.5f, &error);
 
   ASSERT_NE(result, nullptr);
   EXPECT_NE(result->selected_model, nullptr);
   // Model should be one of the two available models
-  bool is_valid_model = (std::string(result->selected_model) == "provider1/gpt-4" ||
-                         std::string(result->selected_model) == "provider2/llama");
+  bool is_valid_model = (std::string(result->selected_model) == "provider1/gpt-4"
+                         || std::string(result->selected_model) == "provider2/llama");
   EXPECT_TRUE(is_valid_model) << "Unexpected model: " << result->selected_model;
   EXPECT_EQ(result->cluster_id, 0);
   EXPECT_GE(result->cluster_distance, 0.0f);
@@ -157,27 +158,23 @@ TEST_F(CFFITest, SingleRouteWithDoubleReturnsValidResult) {
 
   // With strict type enforcement, double routing on float32 router returns nullptr
   NordlysErrorCode error;
-  NordlysRouteResult64* result = nordlys_router_route_f64(
-      router_, embedding.data(), embedding_dim, 0.5f, &error);
+  NordlysRouteResult64* result
+      = nordlys_router_route_f64(router_, embedding.data(), embedding_dim, 0.5f, &error);
 
   EXPECT_EQ(result, nullptr);
 }
-
-
 
 TEST_F(CFFITest, BatchRouteReturnsValidResults) {
   size_t embedding_dim = nordlys_router_get_embedding_dim(router_);
   size_t n_embeddings = 3;
 
   // Create 3 embeddings, each close to a different cluster
-  std::vector<float> embeddings = {
-    // Embedding 1: close to cluster 0 [1,0,0,0]
-    0.95f, 0.05f, 0.0f, 0.0f,
-    // Embedding 2: close to cluster 1 [0,1,0,0]
-    0.05f, 0.95f, 0.0f, 0.0f,
-    // Embedding 3: close to cluster 2 [0,0,1,0]
-    0.0f, 0.05f, 0.95f, 0.0f
-  };
+  std::vector<float> embeddings = {// Embedding 1: close to cluster 0 [1,0,0,0]
+                                   0.95f, 0.05f, 0.0f, 0.0f,
+                                   // Embedding 2: close to cluster 1 [0,1,0,0]
+                                   0.05f, 0.95f, 0.0f, 0.0f,
+                                   // Embedding 3: close to cluster 2 [0,0,1,0]
+                                   0.0f, 0.05f, 0.95f, 0.0f};
 
   NordlysErrorCode error;
   NordlysBatchRouteResult32* result = nordlys_router_route_batch_f32(
@@ -205,10 +202,7 @@ TEST_F(CFFITest, BatchRouteWithDoubleReturnsValidResults) {
   size_t embedding_dim = nordlys_router_get_embedding_dim(router_);
   size_t n_embeddings = 2;
 
-  std::vector<double> embeddings = {
-    0.95, 0.05, 0.0, 0.0,
-    0.0, 0.0, 0.95, 0.05
-  };
+  std::vector<double> embeddings = {0.95, 0.05, 0.0, 0.0, 0.0, 0.0, 0.95, 0.05};
 
   // With strict type enforcement, double batch routing on float32 router returns nullptr
   NordlysErrorCode error;
@@ -247,13 +241,13 @@ TEST_F(CFFITest, RouteWithDifferentCostBiasSelectsDifferentModels) {
 
   // Route with accuracy preference (cost_bias = 0.0)
   NordlysErrorCode error_accuracy;
-  NordlysRouteResult32* result_accuracy = nordlys_router_route_f32(
-      router_, embedding.data(), embedding_dim, 0.0f, &error_accuracy);
+  NordlysRouteResult32* result_accuracy
+      = nordlys_router_route_f32(router_, embedding.data(), embedding_dim, 0.0f, &error_accuracy);
 
   // Route with cost preference (cost_bias = 1.0)
   NordlysErrorCode error_cost;
-  NordlysRouteResult32* result_cost = nordlys_router_route_f32(
-      router_, embedding.data(), embedding_dim, 1.0f, &error_cost);
+  NordlysRouteResult32* result_cost
+      = nordlys_router_route_f32(router_, embedding.data(), embedding_dim, 1.0f, &error_cost);
 
   ASSERT_NE(result_accuracy, nullptr);
   ASSERT_NE(result_cost, nullptr);
@@ -274,8 +268,8 @@ TEST_F(CFFITest, RouteWithWrongDimensionReturnsNull) {
   std::vector<float> wrong_embedding = {1.0f, 0.0f, 0.0f};
 
   NordlysErrorCode error;
-  NordlysRouteResult32* result = nordlys_router_route_f32(
-      router_, wrong_embedding.data(), wrong_embedding.size(), 0.5f, &error);
+  NordlysRouteResult32* result = nordlys_router_route_f32(router_, wrong_embedding.data(),
+                                                          wrong_embedding.size(), 0.5f, &error);
 
   EXPECT_EQ(result, nullptr);
 }
@@ -285,8 +279,8 @@ TEST_F(CFFITest, RouteResultHasAlternatives) {
   std::vector<float> embedding = {0.95f, 0.05f, 0.0f, 0.0f};
 
   NordlysErrorCode error;
-  NordlysRouteResult32* result = nordlys_router_route_f32(
-      router_, embedding.data(), embedding_dim, 0.5f, &error);
+  NordlysRouteResult32* result
+      = nordlys_router_route_f32(router_, embedding.data(), embedding_dim, 0.5f, &error);
 
   ASSERT_NE(result, nullptr);
 
@@ -305,8 +299,8 @@ TEST_F(CFFITest, RouteResultHasAlternatives) {
 TEST_F(CFFITest, BatchRouteHandlesNullRouter) {
   std::vector<float> embeddings(384, 0.5f);
   NordlysErrorCode error;
-  NordlysBatchRouteResult32* result = nordlys_router_route_batch_f32(
-      nullptr, embeddings.data(), 1, 384, 0.5f, &error);
+  NordlysBatchRouteResult32* result
+      = nordlys_router_route_batch_f32(nullptr, embeddings.data(), 1, 384, 0.5f, &error);
   EXPECT_EQ(result, nullptr);
 }
 
@@ -315,8 +309,8 @@ TEST_F(CFFITest, BatchRouteHandlesNullEmbeddings) {
 
   // Pass nullptr embeddings - should return nullptr
   NordlysErrorCode error;
-  NordlysBatchRouteResult32* result = nordlys_router_route_batch_f32(
-      router_, nullptr, 1, embedding_dim, 0.5f, &error);
+  NordlysBatchRouteResult32* result
+      = nordlys_router_route_batch_f32(router_, nullptr, 1, embedding_dim, 0.5f, &error);
   EXPECT_EQ(result, nullptr);
 }
 
@@ -324,12 +318,10 @@ TEST_F(CFFITest, RouteHandlesNullRouter) {
   std::vector<float> embedding = {1.0f, 0.0f, 0.0f, 0.0f};
 
   NordlysErrorCode error;
-  NordlysRouteResult32* result = nordlys_router_route_f32(
-      nullptr, embedding.data(), embedding.size(), 0.5f, &error);
+  NordlysRouteResult32* result
+      = nordlys_router_route_f32(nullptr, embedding.data(), embedding.size(), 0.5f, &error);
   EXPECT_EQ(result, nullptr);
 }
-
-
 
 TEST_F(CFFITest, GetNClustersHandlesNullRouter) {
   size_t n_clusters = nordlys_router_get_n_clusters(nullptr);
@@ -409,16 +401,16 @@ TEST(CFFITestPrecision, GetPrecisionHandlesNullRouter) {
 TEST_F(CFFITest, RouteDoubleOnFloat32RouterReturnsNull) {
   std::vector<double> embedding = {0.95, 0.05, 0.0, 0.0};
   NordlysErrorCode error;
-  NordlysRouteResult64* result = nordlys_router_route_f64(
-      router_, embedding.data(), embedding.size(), 0.5f, &error);
+  NordlysRouteResult64* result
+      = nordlys_router_route_f64(router_, embedding.data(), embedding.size(), 0.5f, &error);
   EXPECT_EQ(result, nullptr);  // Type mismatch: can't use double on float32 router
 }
 
 TEST_F(CFFITestFloat64, RouteFloatOnFloat64RouterReturnsNull) {
   std::vector<float> embedding = {0.95f, 0.05f, 0.0f, 0.0f};
   NordlysErrorCode error;
-  NordlysRouteResult32* result = nordlys_router_route_f32(
-      router_, embedding.data(), embedding.size(), 0.5f, &error);
+  NordlysRouteResult32* result
+      = nordlys_router_route_f32(router_, embedding.data(), embedding.size(), 0.5f, &error);
   EXPECT_EQ(result, nullptr);  // Type mismatch: can't use float on float64 router
 }
 
@@ -426,54 +418,49 @@ TEST_F(CFFITestFloat64, RouteFloatOnFloat64RouterReturnsNull) {
 TEST_F(CFFITestFloat64, RouteDoubleOnFloat64RouterSucceeds) {
   std::vector<double> embedding = {0.95, 0.05, 0.0, 0.0};
   NordlysErrorCode error;
-  NordlysRouteResult64* result = nordlys_router_route_f64(
-      router_, embedding.data(), embedding.size(), 0.5f, &error);
+  NordlysRouteResult64* result
+      = nordlys_router_route_f64(router_, embedding.data(), embedding.size(), 0.5f, &error);
 
   ASSERT_NE(result, nullptr);
   EXPECT_NE(result->selected_model, nullptr);
   EXPECT_EQ(result->cluster_id, 0);
 
-   nordlys_route_result_free_f64(result);
+  nordlys_route_result_free_f64(result);
 }
 
 TEST_F(CFFITestFloat64, BatchRouteDoubleOnFloat64RouterSucceeds) {
-  std::vector<double> embeddings = {
-    0.95, 0.05, 0.0, 0.0,
-    0.0, 0.0, 0.95, 0.05
-  };
+  std::vector<double> embeddings = {0.95, 0.05, 0.0, 0.0, 0.0, 0.0, 0.95, 0.05};
 
   NordlysErrorCode error;
-  NordlysBatchRouteResult64* result = nordlys_router_route_batch_f64(
-      router_, embeddings.data(), 2, 4, 0.5f, &error);
+  NordlysBatchRouteResult64* result
+      = nordlys_router_route_batch_f64(router_, embeddings.data(), 2, 4, 0.5f, &error);
 
   ASSERT_NE(result, nullptr);
   EXPECT_EQ(result->count, 2);
-   EXPECT_EQ(result->results[0].cluster_id, 0);
-   EXPECT_EQ(result->results[1].cluster_id, 2);
+  EXPECT_EQ(result->results[0].cluster_id, 0);
+  EXPECT_EQ(result->results[1].cluster_id, 2);
 
-   nordlys_batch_route_result_free_f64(result);
+  nordlys_batch_route_result_free_f64(result);
 }
 
 TEST_F(CFFITest, BatchRouteDoubleOnFloat32RouterReturnsNull) {
   std::vector<double> embeddings = {0.95, 0.05, 0.0, 0.0};
   NordlysErrorCode error;
-  NordlysBatchRouteResult64* result = nordlys_router_route_batch_f64(
-      router_, embeddings.data(), 1, 4, 0.5f, &error);
+  NordlysBatchRouteResult64* result
+      = nordlys_router_route_batch_f64(router_, embeddings.data(), 1, 4, 0.5f, &error);
   EXPECT_EQ(result, nullptr);
 }
 
 TEST_F(CFFITestFloat64, BatchRouteFloatOnFloat64RouterReturnsNull) {
   std::vector<float> embeddings = {0.95f, 0.05f, 0.0f, 0.0f};
   NordlysErrorCode error;
-  NordlysBatchRouteResult32* result = nordlys_router_route_batch_f32(
-      router_, embeddings.data(), 1, 4, 0.5f, &error);
+  NordlysBatchRouteResult32* result
+      = nordlys_router_route_batch_f32(router_, embeddings.data(), 1, 4, 0.5f, &error);
   EXPECT_EQ(result, nullptr);
 }
 
 // Query functions work on both router types
-TEST_F(CFFITestFloat64, GetNClustersWorks) {
-  EXPECT_EQ(nordlys_router_get_n_clusters(router_), 3);
-}
+TEST_F(CFFITestFloat64, GetNClustersWorks) { EXPECT_EQ(nordlys_router_get_n_clusters(router_), 3); }
 
 TEST_F(CFFITestFloat64, GetEmbeddingDimWorks) {
   EXPECT_EQ(nordlys_router_get_embedding_dim(router_), 4);
@@ -493,8 +480,8 @@ TEST_F(CFFITest, RouteF32SetsErrorCodes) {
   NordlysErrorCode error;
 
   // Valid call should succeed
-  NordlysRouteResult32* result = nordlys_router_route_f32(
-      router_, embedding.data(), embedding.size(), 0.5f, &error);
+  NordlysRouteResult32* result
+      = nordlys_router_route_f32(router_, embedding.data(), embedding.size(), 0.5f, &error);
   EXPECT_EQ(error, NORDLYS_OK);
   EXPECT_NE(result, nullptr);
   nordlys_route_result_free_f32(result);
@@ -514,8 +501,8 @@ TEST_F(CFFITest, RouteF64OnF32RouterSetsTypeMismatchError) {
   std::vector<double> embedding = {0.95, 0.05, 0.0, 0.0};
   NordlysErrorCode error;
 
-  NordlysRouteResult64* result = nordlys_router_route_f64(
-      router_, embedding.data(), embedding.size(), 0.5f, &error);
+  NordlysRouteResult64* result
+      = nordlys_router_route_f64(router_, embedding.data(), embedding.size(), 0.5f, &error);
   EXPECT_EQ(error, NORDLYS_ERROR_TYPE_MISMATCH);
   EXPECT_EQ(result, nullptr);
 }
@@ -524,8 +511,8 @@ TEST_F(CFFITestFloat64, RouteF32OnF64RouterSetsTypeMismatchError) {
   std::vector<float> embedding = {0.95f, 0.05f, 0.0f, 0.0f};
   NordlysErrorCode error;
 
-  NordlysRouteResult32* result = nordlys_router_route_f32(
-      router_, embedding.data(), embedding.size(), 0.5f, &error);
+  NordlysRouteResult32* result
+      = nordlys_router_route_f32(router_, embedding.data(), embedding.size(), 0.5f, &error);
   EXPECT_EQ(error, NORDLYS_ERROR_TYPE_MISMATCH);
   EXPECT_EQ(result, nullptr);
 }
