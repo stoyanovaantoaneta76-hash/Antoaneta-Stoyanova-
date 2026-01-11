@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "nordlys"
-version = "0.1.5"
+version = "0.2.0"
 description = "Intelligent LLM Infrastructure with Smart Model Selection"
 authors = [{ name = "Botir Khaltaev", email = "botirkhaltaev@llmadaptive.uk" }]
 requires-python = ">=3.11,<4.0"
@@ -33,7 +33,7 @@ dependencies = [
   # Clustering
   "hdbscan>=0.8.33",
   "umap-learn>=0.5.0",
-  "numba>=0.56.0",  # Required for Python 3.11+ compatibility
+  "numba>=0.56.0",     # Required for Python 3.11+ compatibility
 ]
 
 
@@ -46,12 +46,12 @@ Documentation = "https://docs.nordlyslabs.com"
 
 [project.optional-dependencies]
 cpu = [
-  "nordlys-core>=0.1.5,<1",
+  "nordlys-core>=0.2.0,<1",
   "torch>=2.2.0",
   "sentence-transformers>=5.2.0,<6",
 ]
 cu12 = [
-  "nordlys-core-cu12>=0.1.4,<1 ; sys_platform == 'linux'",
+  "nordlys-core-cu12>=0.2.0,<1 ; sys_platform == 'linux'",
   "torch>=2.2.0",
   "sentence-transformers>=5.2.0,<6",
 ]
