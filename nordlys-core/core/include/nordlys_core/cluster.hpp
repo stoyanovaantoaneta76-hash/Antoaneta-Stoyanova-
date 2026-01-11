@@ -19,8 +19,7 @@
 
 enum class ClusterBackendType { Cpu, CUDA, Auto };
 
-template <typename Scalar>
-class IClusterBackend {
+template <typename Scalar> class IClusterBackend {
 public:
   virtual ~IClusterBackend() = default;
 
@@ -34,7 +33,7 @@ public:
   [[nodiscard]] virtual std::pair<int, Scalar> assign(const Scalar* embedding, int dim) = 0;
 
   [[nodiscard]] virtual std::vector<std::pair<int, Scalar>> assign_batch(const Scalar* embeddings,
-                                                                          int count, int dim) {
+                                                                         int count, int dim) {
     if (count < 0 || dim <= 0) {
       throw std::invalid_argument("count must be non-negative and dim must be positive");
     }
@@ -63,8 +62,7 @@ protected:
 #  include <usearch/index.hpp>
 #  include <usearch/index_dense.hpp>
 
-template <typename Scalar>
-class CpuClusterBackend : public IClusterBackend<Scalar> {
+template <typename Scalar> class CpuClusterBackend : public IClusterBackend<Scalar> {
 public:
   void load_centroids(const Scalar* data, int n_clusters, int dim) override {
     NORDLYS_ZONE_N("CpuClusterBackend::load_centroids");
@@ -75,11 +73,11 @@ public:
 
     auto nc = static_cast<size_t>(n_clusters);
     auto d = static_cast<size_t>(dim);
-    
+
     if (nc > SIZE_MAX / d) {
       throw std::invalid_argument("n_clusters * dim would overflow");
     }
-    
+
     size_t total_size = nc * d;
     if (total_size > SIZE_MAX / sizeof(Scalar)) {
       throw std::invalid_argument("allocation size would overflow");
@@ -109,16 +107,16 @@ public:
     int best_idx = -1;
     Scalar best_dist_sq = std::numeric_limits<Scalar>::max();
 
-#ifdef _OPENMP
-    #pragma omp parallel
+#  ifdef _OPENMP
+#    pragma omp parallel
     {
       int local_idx = -1;
       Scalar local_dist_sq = std::numeric_limits<Scalar>::max();
 
-      #pragma omp for nowait
+#    pragma omp for nowait
       for (int i = 0; i < n_clusters_; ++i) {
-        const auto* centroid_bytes = reinterpret_cast<const unum::usearch::byte_t*>(
-            centroids_.data() + i * dim_);
+        const auto* centroid_bytes
+            = reinterpret_cast<const unum::usearch::byte_t*>(centroids_.data() + i * dim_);
         auto dist_sq = static_cast<Scalar>(metric_(emb_bytes, centroid_bytes));
 
         if (dist_sq < local_dist_sq) {
@@ -127,7 +125,7 @@ public:
         }
       }
 
-      #pragma omp critical
+#    pragma omp critical
       {
         if (local_dist_sq < best_dist_sq) {
           best_dist_sq = local_dist_sq;
@@ -135,10 +133,10 @@ public:
         }
       }
     }
-#else
+#  else
     for (int i = 0; i < n_clusters_; ++i) {
-      const auto* centroid_bytes = reinterpret_cast<const unum::usearch::byte_t*>(
-          centroids_.data() + i * dim_);
+      const auto* centroid_bytes
+          = reinterpret_cast<const unum::usearch::byte_t*>(centroids_.data() + i * dim_);
       auto dist_sq = static_cast<Scalar>(metric_(emb_bytes, centroid_bytes));
 
       if (dist_sq < best_dist_sq) {
@@ -146,13 +144,13 @@ public:
         best_idx = i;
       }
     }
-#endif
+#  endif
 
     return {best_idx, std::sqrt(best_dist_sq)};
   }
 
-  [[nodiscard]] std::vector<std::pair<int, Scalar>> assign_batch(
-      const Scalar* embeddings, int count, int dim) override {
+  [[nodiscard]] std::vector<std::pair<int, Scalar>> assign_batch(const Scalar* embeddings,
+                                                                 int count, int dim) override {
     NORDLYS_ZONE_N("CpuClusterBackend::assign_batch");
 
     if (count < 0) {
@@ -164,9 +162,9 @@ public:
 
     std::vector<std::pair<int, Scalar>> results(static_cast<size_t>(count));
 
-#ifdef _OPENMP
-    #pragma omp parallel for schedule(static)
-#endif
+#  ifdef _OPENMP
+#    pragma omp parallel for schedule(static)
+#  endif
     for (int i = 0; i < count; ++i) {
       results[static_cast<size_t>(i)] = assign(embeddings + i * dim_, dim_);
     }
@@ -196,8 +194,9 @@ private:
 #  include <cublas_v2.h>
 #  include <cuda_runtime.h>
 
-template <typename Scalar>
-class CudaClusterBackend : public IClusterBackend<Scalar> {
+#  include <nordlys_core/cuda_memory.cuh>
+
+template <typename Scalar> class CudaClusterBackend : public IClusterBackend<Scalar> {
 public:
   CudaClusterBackend();
   ~CudaClusterBackend() override;
@@ -211,6 +210,9 @@ public:
 
   [[nodiscard]] std::pair<int, Scalar> assign(const Scalar* embedding, int dim) override;
 
+  [[nodiscard]] std::vector<std::pair<int, Scalar>> assign_batch(const Scalar* embeddings,
+                                                                 int count, int dim) override;
+
   [[nodiscard]] int get_n_clusters() const noexcept override { return n_clusters_; }
   [[nodiscard]] int get_dim() const noexcept override { return dim_; }
   [[nodiscard]] bool is_gpu_accelerated() const noexcept override { return true; }
@@ -218,6 +220,7 @@ public:
 private:
   void free_memory();
   void capture_graph();
+  void ensure_batch_capacity(int count);
 
   cublasHandle_t cublas_ = nullptr;
   cudaStream_t stream_ = nullptr;
@@ -225,17 +228,40 @@ private:
   cudaGraphExec_t graph_exec_ = nullptr;
   bool graph_valid_ = false;
 
-  Scalar* d_centroids_ = nullptr;
-  Scalar* d_centroid_norms_ = nullptr;
-  Scalar* d_embedding_ = nullptr;
-  Scalar* d_embed_norm_ = nullptr;
-  Scalar* d_dots_ = nullptr;
-  int* d_best_idx_ = nullptr;
-  Scalar* d_best_dist_ = nullptr;
+  CudaDevicePtr<Scalar> d_centroids_;
+  CudaDevicePtr<Scalar> d_centroid_norms_;
+  CudaDevicePtr<Scalar> d_embedding_;
+  CudaDevicePtr<Scalar> d_embed_norm_;
+  CudaDevicePtr<Scalar> d_dots_;
+  CudaDevicePtr<int> d_best_idx_;
+  CudaDevicePtr<Scalar> d_best_dist_;
 
-  Scalar* h_embedding_ = nullptr;
-  int* h_best_idx_ = nullptr;
-  Scalar* h_best_dist_ = nullptr;
+  CudaPinnedPtr<Scalar> h_embedding_;
+  CudaPinnedPtr<int> h_best_idx_;
+  CudaPinnedPtr<Scalar> h_best_dist_;
+
+  static constexpr int kNumPipelineStages = 2;
+
+  struct PipelineStage {
+    cudaStream_t stream = nullptr;
+    cudaEvent_t event = nullptr;
+    CudaDevicePtr<Scalar> d_queries;
+    CudaDevicePtr<Scalar> d_norms;
+    CudaDevicePtr<Scalar> d_dots;
+    CudaDevicePtr<int> d_idx;
+    CudaDevicePtr<Scalar> d_dist;
+    CudaPinnedPtr<Scalar> h_queries;
+    CudaPinnedPtr<int> h_idx;
+    CudaPinnedPtr<Scalar> h_dist;
+    int capacity = 0;
+  };
+
+  PipelineStage stages_[kNumPipelineStages];
+  cublasHandle_t pipeline_cublas_[kNumPipelineStages] = {};
+  bool pipeline_initialized_ = false;
+
+  void init_pipeline();
+  void ensure_stage_capacity(int stage_idx, int count);
 
   int n_clusters_ = 0;
   int dim_ = 0;
@@ -301,8 +327,7 @@ template <typename Scalar>
 #endif
 }
 
-template <typename Scalar = float>
-class ClusterEngine {
+template <typename Scalar = float> class ClusterEngine {
 public:
   ClusterEngine() : backend_(create_cluster_backend<Scalar>(ClusterBackendType::Auto)) {
     if (!backend_) {
@@ -318,8 +343,8 @@ public:
 
   void load_centroids(const EmbeddingMatrix<Scalar>& centers) {
     NORDLYS_ZONE;
-    if (centers.rows() > static_cast<size_t>(std::numeric_limits<int>::max()) ||
-        centers.cols() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    if (centers.rows() > static_cast<size_t>(std::numeric_limits<int>::max())
+        || centers.cols() > static_cast<size_t>(std::numeric_limits<int>::max())) {
       throw std::invalid_argument("matrix dimensions exceed int range");
     }
     backend_->load_centroids(centers.data(), static_cast<int>(centers.rows()),
@@ -333,22 +358,22 @@ public:
     }
     int backend_dim = backend_->get_dim();
     if (backend_dim > 0 && static_cast<int>(dim) != backend_dim) {
-      throw std::invalid_argument("dimension mismatch: expected " + std::to_string(backend_dim) + 
-                                  ", got " + std::to_string(dim));
+      throw std::invalid_argument("dimension mismatch: expected " + std::to_string(backend_dim)
+                                  + ", got " + std::to_string(dim));
     }
     return backend_->assign(embedding, static_cast<int>(dim));
   }
 
   [[nodiscard]] auto assign_batch(const Scalar* embeddings, size_t count, size_t dim) {
     NORDLYS_ZONE;
-    if (count > static_cast<size_t>(std::numeric_limits<int>::max()) ||
-        dim > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    if (count > static_cast<size_t>(std::numeric_limits<int>::max())
+        || dim > static_cast<size_t>(std::numeric_limits<int>::max())) {
       throw std::invalid_argument("count or dim exceeds int range");
     }
     int backend_dim = backend_->get_dim();
     if (backend_dim > 0 && static_cast<int>(dim) != backend_dim) {
-      throw std::invalid_argument("dimension mismatch: expected " + std::to_string(backend_dim) + 
-                                  ", got " + std::to_string(dim));
+      throw std::invalid_argument("dimension mismatch: expected " + std::to_string(backend_dim)
+                                  + ", got " + std::to_string(dim));
     }
     return backend_->assign_batch(embeddings, static_cast<int>(count), static_cast<int>(dim));
   }

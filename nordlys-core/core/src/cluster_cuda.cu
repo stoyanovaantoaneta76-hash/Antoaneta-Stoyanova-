@@ -1,128 +1,128 @@
 #ifdef NORDLYS_HAS_CUDA
 
-#include <nordlys_core/cluster.hpp>
-#include <nordlys_core/distance_cuda.cuh>
-
-#include <cublas_v2.h>
-#include <cuda_runtime.h>
-
-#include <cmath>
-#include <cstring>
-#include <numeric>
-#include <stdexcept>
-#include <string>
-#include <vector>
-
-#define CUDA_CHECK(call) do { \
-  cudaError_t err = (call); \
-  if (err != cudaSuccess) { \
-    throw std::runtime_error(std::string("CUDA error: ") + cudaGetErrorString(err)); \
-  } \
-} while (0)
-
-#define CUBLAS_CHECK(call) do { \
-  cublasStatus_t stat = (call); \
-  if (stat != CUBLAS_STATUS_SUCCESS) { \
-    throw std::runtime_error(std::string("cuBLAS error: ") + std::to_string(stat)); \
-  } \
-} while (0)
+#  include <cmath>
+#  include <cstring>
+#  include <nordlys_core/cluster.hpp>
+#  include <nordlys_core/cuda_common.cuh>
+#  include <nordlys_core/cuda_distance.cuh>
+#  include <numeric>
+#  include <stdexcept>
+#  include <string>
+#  include <vector>
 
 namespace {
 
-template <typename T>
-std::vector<T> compute_squared_norms_cpu(const T* data, size_t n, size_t dim) {
-  std::vector<T> norms(n);
-  for (size_t i = 0; i < n; ++i) {
-    const T* row = data + i * dim;
-    norms[i] = std::inner_product(row, row + dim, row, T{0});
+  template <typename T>
+  std::vector<T> compute_squared_norms_cpu(const T* data, size_t n, size_t dim) {
+    std::vector<T> norms(n);
+    for (size_t i = 0; i < n; ++i) {
+      const T* row = data + i * dim;
+      norms[i] = std::inner_product(row, row + dim, row, T{0});
+    }
+    return norms;
   }
-  return norms;
-}
 
 }  // namespace
 
-using namespace nordlys::cuda;
+// =============================================================================
+// Float Specialization
+// =============================================================================
 
-// Float specialization
-template <>
-void CudaClusterBackend<float>::free_memory() {
-  if (graph_exec_) { cudaGraphExecDestroy(graph_exec_); graph_exec_ = nullptr; }
-  if (graph_) { cudaGraphDestroy(graph_); graph_ = nullptr; }
-  if (d_centroids_) { cudaFree(d_centroids_); d_centroids_ = nullptr; }
-  if (d_centroid_norms_) { cudaFree(d_centroid_norms_); d_centroid_norms_ = nullptr; }
-  if (d_embedding_) { cudaFree(d_embedding_); d_embedding_ = nullptr; }
-  if (d_embed_norm_) { cudaFree(d_embed_norm_); d_embed_norm_ = nullptr; }
-  if (d_dots_) { cudaFree(d_dots_); d_dots_ = nullptr; }
-  if (d_best_idx_) { cudaFree(d_best_idx_); d_best_idx_ = nullptr; }
-  if (d_best_dist_) { cudaFree(d_best_dist_); d_best_dist_ = nullptr; }
-  if (h_embedding_) { cudaFreeHost(h_embedding_); h_embedding_ = nullptr; }
-  if (h_best_idx_) { cudaFreeHost(h_best_idx_); h_best_idx_ = nullptr; }
-  if (h_best_dist_) { cudaFreeHost(h_best_dist_); h_best_dist_ = nullptr; }
+template <> void CudaClusterBackend<float>::free_memory() {
+  if (graph_exec_) {
+    cudaGraphExecDestroy(graph_exec_);
+    graph_exec_ = nullptr;
+  }
+  if (graph_) {
+    cudaGraphDestroy(graph_);
+    graph_ = nullptr;
+  }
+  for (int i = 0; i < kNumPipelineStages; ++i) {
+    if (pipeline_cublas_[i]) {
+      cublasDestroy(pipeline_cublas_[i]);
+      pipeline_cublas_[i] = nullptr;
+    }
+    if (stages_[i].event) {
+      cudaEventDestroy(stages_[i].event);
+      stages_[i].event = nullptr;
+    }
+    if (stages_[i].stream) {
+      cudaStreamDestroy(stages_[i].stream);
+      stages_[i].stream = nullptr;
+    }
+    stages_[i].d_queries.reset();
+    stages_[i].d_norms.reset();
+    stages_[i].d_dots.reset();
+    stages_[i].d_idx.reset();
+    stages_[i].d_dist.reset();
+    stages_[i].h_queries.reset();
+    stages_[i].h_idx.reset();
+    stages_[i].h_dist.reset();
+    stages_[i].capacity = 0;
+  }
+  pipeline_initialized_ = false;
 }
 
-template <>
-CudaClusterBackend<float>::CudaClusterBackend() {
+template <> CudaClusterBackend<float>::CudaClusterBackend() {
   try {
-    CUDA_CHECK(cudaStreamCreate(&stream_));
-    CUBLAS_CHECK(cublasCreate(&cublas_));
-    CUBLAS_CHECK(cublasSetStream(cublas_, stream_));
+    NORDLYS_CUDA_CHECK(cudaStreamCreate(&stream_));
+    NORDLYS_CUBLAS_CHECK(cublasCreate(&cublas_));
+    NORDLYS_CUBLAS_CHECK(cublasSetStream(cublas_, stream_));
   } catch (...) {
-    // Destructor will clean up any successfully created resources
-    // since members are initialized to nullptr in the header
-    if (cublas_) { cublasDestroy(cublas_); cublas_ = nullptr; }
-    if (stream_) { cudaStreamDestroy(stream_); stream_ = nullptr; }
+    if (cublas_) {
+      cublasDestroy(cublas_);
+      cublas_ = nullptr;
+    }
+    if (stream_) {
+      cudaStreamDestroy(stream_);
+      stream_ = nullptr;
+    }
     throw;
   }
 }
 
-template <>
-CudaClusterBackend<float>::~CudaClusterBackend() {
+template <> CudaClusterBackend<float>::~CudaClusterBackend() {
   free_memory();
-  if (cublas_) { cublasDestroy(cublas_); }
-  if (stream_) { cudaStreamDestroy(stream_); }
+  if (cublas_) cublasDestroy(cublas_);
+  if (stream_) cudaStreamDestroy(stream_);
 }
 
-template <>
-void CudaClusterBackend<float>::capture_graph() {
-  if (graph_exec_) { cudaGraphExecDestroy(graph_exec_); graph_exec_ = nullptr; }
-  if (graph_) { cudaGraphDestroy(graph_); graph_ = nullptr; }
+template <> void CudaClusterBackend<float>::capture_graph() {
+  if (graph_exec_) {
+    cudaGraphExecDestroy(graph_exec_);
+    graph_exec_ = nullptr;
+  }
+  if (graph_) {
+    cudaGraphDestroy(graph_);
+    graph_ = nullptr;
+  }
 
-  CUDA_CHECK(cudaStreamSynchronize(stream_));
-  CUDA_CHECK(cudaStreamBeginCapture(stream_, cudaStreamCaptureModeGlobal));
+  NORDLYS_CUDA_CHECK(cudaStreamSynchronize(stream_));
+  NORDLYS_CUDA_CHECK(cudaStreamBeginCapture(stream_, cudaStreamCaptureModeGlobal));
 
-  // H2D: copy embedding only (norm computed on GPU)
-  CUDA_CHECK(cudaMemcpyAsync(d_embedding_, h_embedding_, 
-                             dim_ * sizeof(float), cudaMemcpyHostToDevice, stream_));
+  NORDLYS_CUDA_CHECK(cudaMemcpyAsync(d_embedding_.get(), h_embedding_.get(), dim_ * sizeof(float),
+                                     cudaMemcpyHostToDevice, stream_));
 
-  // Compute embedding norm on GPU (removes one H2D transfer)
-  // Use smaller block for small dims to reduce latency
-  int norm_block = (dim_ <= 512) ? 128 : 256;
-  compute_squared_norm<float><<<1, norm_block, 0, stream_>>>(
-      d_embedding_, dim_, d_embed_norm_);
-
-  // cuBLAS GEMV: dot products
   float alpha = 1.0f, beta = 0.0f;
-  CUBLAS_CHECK(cublasSgemv(cublas_, CUBLAS_OP_T, dim_, n_clusters_,
-                           &alpha, d_centroids_, dim_,
-                           d_embedding_, 1,
-                           &beta, d_dots_, 1));
+  NORDLYS_CUBLAS_CHECK(cublasSgemv(cublas_, CUBLAS_OP_N, n_clusters_, dim_, &alpha,
+                                   d_centroids_.get(), n_clusters_, d_embedding_.get(), 1, &beta,
+                                   d_dots_.get(), 1));
 
-  // Argmin kernel - use 64 threads for small cluster counts (better for 20-100 clusters)
-  int argmin_block = (n_clusters_ <= 128) ? 64 : 128;
-  fused_l2_argmin<float><<<1, argmin_block, 0, stream_>>>(
-      d_centroid_norms_, d_embed_norm_, d_dots_, n_clusters_,
-      d_best_idx_, d_best_dist_);
-  CUDA_CHECK(cudaGetLastError());
+  int fused_block = std::max((dim_ <= 512) ? 128 : 256, (n_clusters_ <= 128) ? 64 : 128);
+  size_t shared_mem = fused_l2_argmin_shared_mem_size<float>();
+  fused_l2_argmin_with_norm<float><<<1, fused_block, shared_mem, stream_>>>(
+      d_embedding_.get(), d_centroid_norms_.get(), d_dots_.get(), n_clusters_, dim_,
+      d_best_idx_.get(), d_best_dist_.get());
+  NORDLYS_CUDA_CHECK(cudaGetLastError());
 
-  // D2H: copy results
-  CUDA_CHECK(cudaMemcpyAsync(h_best_idx_, d_best_idx_, sizeof(int),
-                             cudaMemcpyDeviceToHost, stream_));
-  CUDA_CHECK(cudaMemcpyAsync(h_best_dist_, d_best_dist_, sizeof(float),
-                             cudaMemcpyDeviceToHost, stream_));
+  NORDLYS_CUDA_CHECK(cudaMemcpyAsync(h_best_idx_.get(), d_best_idx_.get(), sizeof(int),
+                                     cudaMemcpyDeviceToHost, stream_));
+  NORDLYS_CUDA_CHECK(cudaMemcpyAsync(h_best_dist_.get(), d_best_dist_.get(), sizeof(float),
+                                     cudaMemcpyDeviceToHost, stream_));
 
-  CUDA_CHECK(cudaStreamEndCapture(stream_, &graph_));
-  CUDA_CHECK(cudaGraphInstantiate(&graph_exec_, graph_, nullptr, nullptr, 0));
-  
+  NORDLYS_CUDA_CHECK(cudaStreamEndCapture(stream_, &graph_));
+  NORDLYS_CUDA_CHECK(cudaGraphInstantiate(&graph_exec_, graph_, nullptr, nullptr, 0));
+
   graph_valid_ = true;
 }
 
@@ -144,29 +144,27 @@ void CudaClusterBackend<float>::load_centroids(const float* data, int n_clusters
   n_clusters_ = n_clusters;
   dim_ = dim;
 
-  // Device memory
-  CUDA_CHECK(cudaMalloc(&d_centroids_, nc * d * sizeof(float)));
-  CUDA_CHECK(cudaMalloc(&d_centroid_norms_, nc * sizeof(float)));
-  CUDA_CHECK(cudaMalloc(&d_embedding_, d * sizeof(float)));
-  CUDA_CHECK(cudaMalloc(&d_embed_norm_, sizeof(float)));
-  CUDA_CHECK(cudaMalloc(&d_dots_, nc * sizeof(float)));
-  CUDA_CHECK(cudaMalloc(&d_best_idx_, sizeof(int)));
-  CUDA_CHECK(cudaMalloc(&d_best_dist_, sizeof(float)));
+  d_centroids_.reset(nc * d);
+  d_centroid_norms_.reset(nc);
+  d_embedding_.reset(d);
+  d_embed_norm_.reset(1);
+  d_dots_.reset(nc);
+  d_best_idx_.reset(1);
+  d_best_dist_.reset(1);
 
-  // Pinned host memory
-  CUDA_CHECK(cudaMallocHost(&h_embedding_, d * sizeof(float)));
-  CUDA_CHECK(cudaMallocHost(&h_best_idx_, sizeof(int)));
-  CUDA_CHECK(cudaMallocHost(&h_best_dist_, sizeof(float)));
+  h_embedding_.reset(d);
+  h_best_idx_.reset(1);
+  h_best_dist_.reset(1);
 
-  // Upload centroids
   auto centroids_col = to_col_major(data, nc, d);
   auto norms = compute_squared_norms_cpu(data, nc, d);
 
-  CUDA_CHECK(cudaMemcpy(d_centroids_, centroids_col.data(), nc * d * sizeof(float), cudaMemcpyHostToDevice));
-  CUDA_CHECK(cudaMemcpy(d_centroid_norms_, norms.data(), nc * sizeof(float), cudaMemcpyHostToDevice));
+  NORDLYS_CUDA_CHECK(cudaMemcpy(d_centroids_.get(), centroids_col.data(), nc * d * sizeof(float),
+                                cudaMemcpyHostToDevice));
+  NORDLYS_CUDA_CHECK(cudaMemcpy(d_centroid_norms_.get(), norms.data(), nc * sizeof(float),
+                                cudaMemcpyHostToDevice));
 
-  // Capture CUDA graph with dummy data
-  std::fill_n(h_embedding_, d, 1.0f);
+  std::fill_n(h_embedding_.get(), d, 1.0f);
   capture_graph();
 }
 
@@ -180,89 +178,226 @@ std::pair<int, float> CudaClusterBackend<float>::assign(const float* embedding, 
     throw std::runtime_error("CUDA graph not initialized - call load_centroids first");
   }
 
-  // Copy to pinned memory (norm computed on GPU)
-  std::memcpy(h_embedding_, embedding, static_cast<size_t>(dim) * sizeof(float));
+  std::memcpy(h_embedding_.get(), embedding, static_cast<size_t>(dim) * sizeof(float));
 
-  // Launch graph (replays entire pipeline)
-  CUDA_CHECK(cudaGraphLaunch(graph_exec_, stream_));
-  CUDA_CHECK(cudaStreamSynchronize(stream_));
+  NORDLYS_CUDA_CHECK(cudaGraphLaunch(graph_exec_, stream_));
+  NORDLYS_CUDA_CHECK(cudaStreamSynchronize(stream_));
 
-  return {*h_best_idx_, *h_best_dist_};
+  return {*h_best_idx_.get(), *h_best_dist_.get()};
 }
 
-// Double specialization
-template <>
-void CudaClusterBackend<double>::free_memory() {
-  if (graph_exec_) { cudaGraphExecDestroy(graph_exec_); graph_exec_ = nullptr; }
-  if (graph_) { cudaGraphDestroy(graph_); graph_ = nullptr; }
-  if (d_centroids_) { cudaFree(d_centroids_); d_centroids_ = nullptr; }
-  if (d_centroid_norms_) { cudaFree(d_centroid_norms_); d_centroid_norms_ = nullptr; }
-  if (d_embedding_) { cudaFree(d_embedding_); d_embedding_ = nullptr; }
-  if (d_embed_norm_) { cudaFree(d_embed_norm_); d_embed_norm_ = nullptr; }
-  if (d_dots_) { cudaFree(d_dots_); d_dots_ = nullptr; }
-  if (d_best_idx_) { cudaFree(d_best_idx_); d_best_idx_ = nullptr; }
-  if (d_best_dist_) { cudaFree(d_best_dist_); d_best_dist_ = nullptr; }
-  if (h_embedding_) { cudaFreeHost(h_embedding_); h_embedding_ = nullptr; }
-  if (h_best_idx_) { cudaFreeHost(h_best_idx_); h_best_idx_ = nullptr; }
-  if (h_best_dist_) { cudaFreeHost(h_best_dist_); h_best_dist_ = nullptr; }
+template <> void CudaClusterBackend<float>::init_pipeline() {
+  if (pipeline_initialized_) return;
+  for (int i = 0; i < kNumPipelineStages; ++i) {
+    NORDLYS_CUDA_CHECK(cudaStreamCreate(&stages_[i].stream));
+    NORDLYS_CUDA_CHECK(cudaEventCreate(&stages_[i].event));
+    NORDLYS_CUBLAS_CHECK(cublasCreate(&pipeline_cublas_[i]));
+    NORDLYS_CUBLAS_CHECK(cublasSetStream(pipeline_cublas_[i], stages_[i].stream));
+  }
+  pipeline_initialized_ = true;
+}
+
+template <> void CudaClusterBackend<float>::ensure_stage_capacity(int stage_idx, int count) {
+  auto& stage = stages_[stage_idx];
+  if (count <= stage.capacity) return;
+
+  int new_cap = count + count / 2;
+
+  stage.d_queries.reset(new_cap * dim_);
+  stage.d_norms.reset(new_cap);
+  stage.d_dots.reset(new_cap * n_clusters_);
+  stage.d_idx.reset(new_cap);
+  stage.d_dist.reset(new_cap);
+
+  stage.h_queries.reset(new_cap * dim_);
+  stage.h_idx.reset(new_cap);
+  stage.h_dist.reset(new_cap);
+
+  stage.capacity = new_cap;
 }
 
 template <>
-CudaClusterBackend<double>::CudaClusterBackend() {
+std::vector<std::pair<int, float>> CudaClusterBackend<float>::assign_batch(const float* embeddings,
+                                                                           int count, int dim) {
+  if (count == 0) return {};
+  if (count == 1) return {assign(embeddings, dim)};
+  if (dim != dim_) throw std::invalid_argument("dimension mismatch");
+
+  init_pipeline();
+
+  constexpr int kMinChunkSize = 64;
+  int chunk_size = std::max(kMinChunkSize, (count + kNumPipelineStages - 1) / kNumPipelineStages);
+  int num_chunks = (count + chunk_size - 1) / chunk_size;
+
+  for (int i = 0; i < kNumPipelineStages; ++i) {
+    ensure_stage_capacity(i, chunk_size);
+  }
+
+  std::vector<std::pair<int, float>> results(count);
+  int fused_threads = std::max((dim_ <= 512) ? 128 : 256, (n_clusters_ <= 128) ? 64 : 128);
+  size_t shared_mem = fused_l2_argmin_shared_mem_size<float>();
+  float alpha = 1.0f, beta = 0.0f;
+
+  for (int chunk = 0; chunk < num_chunks; ++chunk) {
+    int stage_idx = chunk % kNumPipelineStages;
+    auto& stage = stages_[stage_idx];
+    auto& cublas = pipeline_cublas_[stage_idx];
+
+    int offset = chunk * chunk_size;
+    int this_count = std::min(chunk_size, count - offset);
+    const float* src = embeddings + offset * dim_;
+
+    if (chunk >= kNumPipelineStages) {
+      int prev_chunk = chunk - kNumPipelineStages;
+      int prev_stage = prev_chunk % kNumPipelineStages;
+      auto& prev = stages_[prev_stage];
+
+      NORDLYS_CUDA_CHECK(cudaEventSynchronize(prev.event));
+
+      int prev_offset = prev_chunk * chunk_size;
+      int prev_count = std::min(chunk_size, count - prev_offset);
+      for (int i = 0; i < prev_count; ++i) {
+        results[prev_offset + i] = {prev.h_idx.get()[i], prev.h_dist.get()[i]};
+      }
+    }
+
+    NORDLYS_CUDA_CHECK(cudaMemcpyAsync(stage.d_queries.get(), src,
+                                       this_count * dim_ * sizeof(float), cudaMemcpyHostToDevice,
+                                       stage.stream));
+
+    NORDLYS_CUBLAS_CHECK(cublasSgemm(
+        cublas, CUBLAS_OP_N, CUBLAS_OP_N, n_clusters_, this_count, dim_, &alpha, d_centroids_.get(),
+        n_clusters_, stage.d_queries.get(), dim_, &beta, stage.d_dots.get(), n_clusters_));
+
+    batch_l2_argmin_fused<<<this_count, fused_threads, shared_mem, stage.stream>>>(
+        stage.d_queries.get(), d_centroid_norms_.get(), stage.d_dots.get(), this_count, n_clusters_,
+        dim_, stage.d_idx.get(), stage.d_dist.get());
+
+    NORDLYS_CUDA_CHECK(cudaMemcpyAsync(stage.h_idx.get(), stage.d_idx.get(),
+                                       this_count * sizeof(int), cudaMemcpyDeviceToHost,
+                                       stage.stream));
+    NORDLYS_CUDA_CHECK(cudaMemcpyAsync(stage.h_dist.get(), stage.d_dist.get(),
+                                       this_count * sizeof(float), cudaMemcpyDeviceToHost,
+                                       stage.stream));
+
+    NORDLYS_CUDA_CHECK(cudaEventRecord(stage.event, stage.stream));
+  }
+
+  for (int tail = std::max(0, num_chunks - kNumPipelineStages); tail < num_chunks; ++tail) {
+    int stage_idx = tail % kNumPipelineStages;
+    auto& stage = stages_[stage_idx];
+
+    NORDLYS_CUDA_CHECK(cudaEventSynchronize(stage.event));
+
+    int offset = tail * chunk_size;
+    int this_count = std::min(chunk_size, count - offset);
+    for (int i = 0; i < this_count; ++i) {
+      results[offset + i] = {stage.h_idx.get()[i], stage.h_dist.get()[i]};
+    }
+  }
+
+  return results;
+}
+
+// =============================================================================
+// Double Specialization
+// =============================================================================
+
+template <> void CudaClusterBackend<double>::free_memory() {
+  if (graph_exec_) {
+    cudaGraphExecDestroy(graph_exec_);
+    graph_exec_ = nullptr;
+  }
+  if (graph_) {
+    cudaGraphDestroy(graph_);
+    graph_ = nullptr;
+  }
+  for (int i = 0; i < kNumPipelineStages; ++i) {
+    if (pipeline_cublas_[i]) {
+      cublasDestroy(pipeline_cublas_[i]);
+      pipeline_cublas_[i] = nullptr;
+    }
+    if (stages_[i].event) {
+      cudaEventDestroy(stages_[i].event);
+      stages_[i].event = nullptr;
+    }
+    if (stages_[i].stream) {
+      cudaStreamDestroy(stages_[i].stream);
+      stages_[i].stream = nullptr;
+    }
+    stages_[i].d_queries.reset();
+    stages_[i].d_norms.reset();
+    stages_[i].d_dots.reset();
+    stages_[i].d_idx.reset();
+    stages_[i].d_dist.reset();
+    stages_[i].h_queries.reset();
+    stages_[i].h_idx.reset();
+    stages_[i].h_dist.reset();
+    stages_[i].capacity = 0;
+  }
+  pipeline_initialized_ = false;
+}
+
+template <> CudaClusterBackend<double>::CudaClusterBackend() {
   try {
-    CUDA_CHECK(cudaStreamCreate(&stream_));
-    CUBLAS_CHECK(cublasCreate(&cublas_));
-    CUBLAS_CHECK(cublasSetStream(cublas_, stream_));
+    NORDLYS_CUDA_CHECK(cudaStreamCreate(&stream_));
+    NORDLYS_CUBLAS_CHECK(cublasCreate(&cublas_));
+    NORDLYS_CUBLAS_CHECK(cublasSetStream(cublas_, stream_));
   } catch (...) {
-    // Clean up any successfully created resources before re-throwing
-    if (cublas_) { cublasDestroy(cublas_); cublas_ = nullptr; }
-    if (stream_) { cudaStreamDestroy(stream_); stream_ = nullptr; }
+    if (cublas_) {
+      cublasDestroy(cublas_);
+      cublas_ = nullptr;
+    }
+    if (stream_) {
+      cudaStreamDestroy(stream_);
+      stream_ = nullptr;
+    }
     throw;
   }
 }
 
-template <>
-CudaClusterBackend<double>::~CudaClusterBackend() {
+template <> CudaClusterBackend<double>::~CudaClusterBackend() {
   free_memory();
-  if (cublas_) { cublasDestroy(cublas_); }
-  if (stream_) { cudaStreamDestroy(stream_); }
+  if (cublas_) cublasDestroy(cublas_);
+  if (stream_) cudaStreamDestroy(stream_);
 }
 
-template <>
-void CudaClusterBackend<double>::capture_graph() {
-  if (graph_exec_) { cudaGraphExecDestroy(graph_exec_); graph_exec_ = nullptr; }
-  if (graph_) { cudaGraphDestroy(graph_); graph_ = nullptr; }
+template <> void CudaClusterBackend<double>::capture_graph() {
+  if (graph_exec_) {
+    cudaGraphExecDestroy(graph_exec_);
+    graph_exec_ = nullptr;
+  }
+  if (graph_) {
+    cudaGraphDestroy(graph_);
+    graph_ = nullptr;
+  }
 
-  CUDA_CHECK(cudaStreamSynchronize(stream_));
-  CUDA_CHECK(cudaStreamBeginCapture(stream_, cudaStreamCaptureModeGlobal));
+  NORDLYS_CUDA_CHECK(cudaStreamSynchronize(stream_));
+  NORDLYS_CUDA_CHECK(cudaStreamBeginCapture(stream_, cudaStreamCaptureModeGlobal));
 
-  CUDA_CHECK(cudaMemcpyAsync(d_embedding_, h_embedding_, 
-                             dim_ * sizeof(double), cudaMemcpyHostToDevice, stream_));
-
-  int norm_block = (dim_ <= 512) ? 128 : 256;
-  compute_squared_norm<double><<<1, norm_block, 0, stream_>>>(
-      d_embedding_, dim_, d_embed_norm_);
+  NORDLYS_CUDA_CHECK(cudaMemcpyAsync(d_embedding_.get(), h_embedding_.get(), dim_ * sizeof(double),
+                                     cudaMemcpyHostToDevice, stream_));
 
   double alpha = 1.0, beta = 0.0;
-  CUBLAS_CHECK(cublasDgemv(cublas_, CUBLAS_OP_T, dim_, n_clusters_,
-                           &alpha, d_centroids_, dim_,
-                           d_embedding_, 1,
-                           &beta, d_dots_, 1));
+  NORDLYS_CUBLAS_CHECK(cublasDgemv(cublas_, CUBLAS_OP_N, n_clusters_, dim_, &alpha,
+                                   d_centroids_.get(), n_clusters_, d_embedding_.get(), 1, &beta,
+                                   d_dots_.get(), 1));
 
-  int argmin_block = (n_clusters_ <= 128) ? 64 : 128;
-  fused_l2_argmin<double><<<1, argmin_block, 0, stream_>>>(
-      d_centroid_norms_, d_embed_norm_, d_dots_, n_clusters_,
-      d_best_idx_, d_best_dist_);
-  CUDA_CHECK(cudaGetLastError());
+  int fused_block = std::max((dim_ <= 512) ? 128 : 256, (n_clusters_ <= 128) ? 64 : 128);
+  size_t shared_mem = fused_l2_argmin_shared_mem_size<double>();
+  fused_l2_argmin_with_norm<double><<<1, fused_block, shared_mem, stream_>>>(
+      d_embedding_.get(), d_centroid_norms_.get(), d_dots_.get(), n_clusters_, dim_,
+      d_best_idx_.get(), d_best_dist_.get());
+  NORDLYS_CUDA_CHECK(cudaGetLastError());
 
-  CUDA_CHECK(cudaMemcpyAsync(h_best_idx_, d_best_idx_, sizeof(int),
-                             cudaMemcpyDeviceToHost, stream_));
-  CUDA_CHECK(cudaMemcpyAsync(h_best_dist_, d_best_dist_, sizeof(double),
-                             cudaMemcpyDeviceToHost, stream_));
+  NORDLYS_CUDA_CHECK(cudaMemcpyAsync(h_best_idx_.get(), d_best_idx_.get(), sizeof(int),
+                                     cudaMemcpyDeviceToHost, stream_));
+  NORDLYS_CUDA_CHECK(cudaMemcpyAsync(h_best_dist_.get(), d_best_dist_.get(), sizeof(double),
+                                     cudaMemcpyDeviceToHost, stream_));
 
-  CUDA_CHECK(cudaStreamEndCapture(stream_, &graph_));
-  CUDA_CHECK(cudaGraphInstantiate(&graph_exec_, graph_, nullptr, nullptr, 0));
-  
+  NORDLYS_CUDA_CHECK(cudaStreamEndCapture(stream_, &graph_));
+  NORDLYS_CUDA_CHECK(cudaGraphInstantiate(&graph_exec_, graph_, nullptr, nullptr, 0));
+
   graph_valid_ = true;
 }
 
@@ -284,24 +419,27 @@ void CudaClusterBackend<double>::load_centroids(const double* data, int n_cluste
   n_clusters_ = n_clusters;
   dim_ = dim;
 
-  CUDA_CHECK(cudaMalloc(&d_centroids_, nc * d * sizeof(double)));
-  CUDA_CHECK(cudaMalloc(&d_centroid_norms_, nc * sizeof(double)));
-  CUDA_CHECK(cudaMalloc(&d_embedding_, d * sizeof(double)));
-  CUDA_CHECK(cudaMalloc(&d_embed_norm_, sizeof(double)));
-  CUDA_CHECK(cudaMalloc(&d_dots_, nc * sizeof(double)));
-  CUDA_CHECK(cudaMalloc(&d_best_idx_, sizeof(int)));
-  CUDA_CHECK(cudaMalloc(&d_best_dist_, sizeof(double)));
-  CUDA_CHECK(cudaMallocHost(&h_embedding_, d * sizeof(double)));
-  CUDA_CHECK(cudaMallocHost(&h_best_idx_, sizeof(int)));
-  CUDA_CHECK(cudaMallocHost(&h_best_dist_, sizeof(double)));
+  d_centroids_.reset(nc * d);
+  d_centroid_norms_.reset(nc);
+  d_embedding_.reset(d);
+  d_embed_norm_.reset(1);
+  d_dots_.reset(nc);
+  d_best_idx_.reset(1);
+  d_best_dist_.reset(1);
+
+  h_embedding_.reset(d);
+  h_best_idx_.reset(1);
+  h_best_dist_.reset(1);
 
   auto centroids_col = to_col_major(data, nc, d);
   auto norms = compute_squared_norms_cpu(data, nc, d);
 
-  CUDA_CHECK(cudaMemcpy(d_centroids_, centroids_col.data(), nc * d * sizeof(double), cudaMemcpyHostToDevice));
-  CUDA_CHECK(cudaMemcpy(d_centroid_norms_, norms.data(), nc * sizeof(double), cudaMemcpyHostToDevice));
+  NORDLYS_CUDA_CHECK(cudaMemcpy(d_centroids_.get(), centroids_col.data(), nc * d * sizeof(double),
+                                cudaMemcpyHostToDevice));
+  NORDLYS_CUDA_CHECK(cudaMemcpy(d_centroid_norms_.get(), norms.data(), nc * sizeof(double),
+                                cudaMemcpyHostToDevice));
 
-  std::fill_n(h_embedding_, d, 1.0);
+  std::fill_n(h_embedding_.get(), d, 1.0);
   capture_graph();
 }
 
@@ -315,12 +453,124 @@ std::pair<int, double> CudaClusterBackend<double>::assign(const double* embeddin
     throw std::runtime_error("CUDA graph not initialized - call load_centroids first");
   }
 
-  std::memcpy(h_embedding_, embedding, static_cast<size_t>(dim) * sizeof(double));
+  std::memcpy(h_embedding_.get(), embedding, static_cast<size_t>(dim) * sizeof(double));
 
-  CUDA_CHECK(cudaGraphLaunch(graph_exec_, stream_));
-  CUDA_CHECK(cudaStreamSynchronize(stream_));
+  NORDLYS_CUDA_CHECK(cudaGraphLaunch(graph_exec_, stream_));
+  NORDLYS_CUDA_CHECK(cudaStreamSynchronize(stream_));
 
-  return {*h_best_idx_, *h_best_dist_};
+  return {*h_best_idx_.get(), *h_best_dist_.get()};
+}
+
+template <> void CudaClusterBackend<double>::init_pipeline() {
+  if (pipeline_initialized_) return;
+  for (int i = 0; i < kNumPipelineStages; ++i) {
+    NORDLYS_CUDA_CHECK(cudaStreamCreate(&stages_[i].stream));
+    NORDLYS_CUDA_CHECK(cudaEventCreate(&stages_[i].event));
+    NORDLYS_CUBLAS_CHECK(cublasCreate(&pipeline_cublas_[i]));
+    NORDLYS_CUBLAS_CHECK(cublasSetStream(pipeline_cublas_[i], stages_[i].stream));
+  }
+  pipeline_initialized_ = true;
+}
+
+template <> void CudaClusterBackend<double>::ensure_stage_capacity(int stage_idx, int count) {
+  auto& stage = stages_[stage_idx];
+  if (count <= stage.capacity) return;
+
+  int new_cap = count + count / 2;
+
+  stage.d_queries.reset(new_cap * dim_);
+  stage.d_norms.reset(new_cap);
+  stage.d_dots.reset(new_cap * n_clusters_);
+  stage.d_idx.reset(new_cap);
+  stage.d_dist.reset(new_cap);
+
+  stage.h_queries.reset(new_cap * dim_);
+  stage.h_idx.reset(new_cap);
+  stage.h_dist.reset(new_cap);
+
+  stage.capacity = new_cap;
+}
+
+template <> std::vector<std::pair<int, double>> CudaClusterBackend<double>::assign_batch(
+    const double* embeddings, int count, int dim) {
+  if (count == 0) return {};
+  if (count == 1) return {assign(embeddings, dim)};
+  if (dim != dim_) throw std::invalid_argument("dimension mismatch");
+
+  init_pipeline();
+
+  constexpr int kMinChunkSize = 64;
+  int chunk_size = std::max(kMinChunkSize, (count + kNumPipelineStages - 1) / kNumPipelineStages);
+  int num_chunks = (count + chunk_size - 1) / chunk_size;
+
+  for (int i = 0; i < kNumPipelineStages; ++i) {
+    ensure_stage_capacity(i, chunk_size);
+  }
+
+  std::vector<std::pair<int, double>> results(count);
+  int fused_threads = std::max((dim_ <= 512) ? 128 : 256, (n_clusters_ <= 128) ? 64 : 128);
+  size_t shared_mem = fused_l2_argmin_shared_mem_size<double>();
+  double alpha = 1.0, beta = 0.0;
+
+  for (int chunk = 0; chunk < num_chunks; ++chunk) {
+    int stage_idx = chunk % kNumPipelineStages;
+    auto& stage = stages_[stage_idx];
+    auto& cublas = pipeline_cublas_[stage_idx];
+
+    int offset = chunk * chunk_size;
+    int this_count = std::min(chunk_size, count - offset);
+    const double* src = embeddings + offset * dim_;
+
+    if (chunk >= kNumPipelineStages) {
+      int prev_chunk = chunk - kNumPipelineStages;
+      int prev_stage = prev_chunk % kNumPipelineStages;
+      auto& prev = stages_[prev_stage];
+
+      NORDLYS_CUDA_CHECK(cudaEventSynchronize(prev.event));
+
+      int prev_offset = prev_chunk * chunk_size;
+      int prev_count = std::min(chunk_size, count - prev_offset);
+      for (int i = 0; i < prev_count; ++i) {
+        results[prev_offset + i] = {prev.h_idx.get()[i], prev.h_dist.get()[i]};
+      }
+    }
+
+    NORDLYS_CUDA_CHECK(cudaMemcpyAsync(stage.d_queries.get(), src,
+                                       this_count * dim_ * sizeof(double), cudaMemcpyHostToDevice,
+                                       stage.stream));
+
+    NORDLYS_CUBLAS_CHECK(cublasDgemm(
+        cublas, CUBLAS_OP_N, CUBLAS_OP_N, n_clusters_, this_count, dim_, &alpha, d_centroids_.get(),
+        n_clusters_, stage.d_queries.get(), dim_, &beta, stage.d_dots.get(), n_clusters_));
+
+    batch_l2_argmin_fused<<<this_count, fused_threads, shared_mem, stage.stream>>>(
+        stage.d_queries.get(), d_centroid_norms_.get(), stage.d_dots.get(), this_count, n_clusters_,
+        dim_, stage.d_idx.get(), stage.d_dist.get());
+
+    NORDLYS_CUDA_CHECK(cudaMemcpyAsync(stage.h_idx.get(), stage.d_idx.get(),
+                                       this_count * sizeof(int), cudaMemcpyDeviceToHost,
+                                       stage.stream));
+    NORDLYS_CUDA_CHECK(cudaMemcpyAsync(stage.h_dist.get(), stage.d_dist.get(),
+                                       this_count * sizeof(double), cudaMemcpyDeviceToHost,
+                                       stage.stream));
+
+    NORDLYS_CUDA_CHECK(cudaEventRecord(stage.event, stage.stream));
+  }
+
+  for (int tail = std::max(0, num_chunks - kNumPipelineStages); tail < num_chunks; ++tail) {
+    int stage_idx = tail % kNumPipelineStages;
+    auto& stage = stages_[stage_idx];
+
+    NORDLYS_CUDA_CHECK(cudaEventSynchronize(stage.event));
+
+    int offset = tail * chunk_size;
+    int this_count = std::min(chunk_size, count - offset);
+    for (int i = 0; i < this_count; ++i) {
+      results[offset + i] = {stage.h_idx.get()[i], stage.h_dist.get()[i]};
+    }
+  }
+
+  return results;
 }
 
 #endif  // NORDLYS_HAS_CUDA
