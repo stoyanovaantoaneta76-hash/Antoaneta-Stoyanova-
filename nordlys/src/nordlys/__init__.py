@@ -53,7 +53,7 @@ from nordlys_core_ext import (
 # Package metadata
 # ============================================================================
 
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 
 __all__ = [
     # Main API

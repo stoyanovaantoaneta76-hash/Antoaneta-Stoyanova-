@@ -22,7 +22,6 @@
 #include <nordlys_core/tracy.hpp>
 #include <ranges>
 #include <simdjson.h>
-#include <sstream>
 #include <stdexcept>
 
 using json = nlohmann::json;
@@ -130,14 +129,20 @@ NordlysCheckpoint NordlysCheckpoint::from_json(const std::string& path) {
     return *cached;
   }
 
-  std::ifstream file(path);
-  if (!file.is_open()) {
+  std::ifstream file(path, std::ios::binary | std::ios::ate);
+  if (!file.is_open()) [[unlikely]] {
     throw std::runtime_error(std::format("Failed to open checkpoint file: {}", path));
   }
 
-  std::stringstream buffer;
-  buffer << file.rdbuf();
-  auto checkpoint = std::make_shared<NordlysCheckpoint>(from_json_string(buffer.str()));
+  const auto file_size = file.tellg();
+  file.seekg(0, std::ios::beg);
+
+  std::string content(static_cast<size_t>(file_size), '\0');
+  if (!file.read(content.data(), file_size)) [[unlikely]] {
+    throw std::runtime_error(std::format("Failed to read checkpoint file: {}", path));
+  }
+
+  auto checkpoint = std::make_shared<NordlysCheckpoint>(from_json_string(content));
   checkpoint_cache().put(path, checkpoint);
   return *checkpoint;
 }

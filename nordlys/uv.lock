@@ -451,7 +451,7 @@ wheels = [
 
 [[package]]
 name = "nordlys"
-version = "0.1.5"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "hdbscan" },
@@ -494,8 +494,8 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "hdbscan", specifier = ">=0.8.33" },
-    { name = "nordlys-core", marker = "extra == 'cpu'", specifier = ">=0.1.5,<1" },
-    { name = "nordlys-core-cu12", marker = "sys_platform == 'linux' and extra == 'cu12'", specifier = ">=0.1.4,<1" },
+    { name = "nordlys-core", marker = "extra == 'cpu'", specifier = ">=0.2.0,<1" },
+    { name = "nordlys-core-cu12", marker = "sys_platform == 'linux' and extra == 'cu12'", specifier = ">=0.2.0,<1" },
     { name = "numba", specifier = ">=0.56.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pydantic", specifier = ">=2.11.5,<3" },
@@ -526,35 +526,35 @@ test = [
 
 [[package]]
 name = "nordlys-core"
-version = "0.1.5"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "pytest" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/15/2f/82b07002858c4efb5f508a47f7406d01d5d9635e1742f5d2ddbcf5873f34/nordlys_core-0.1.5-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:cddae07932e5b6bbc74434d9e489fc490c955372acb5ad82911f0846585d8d2c", size = 800767, upload-time = "2026-01-09T22:59:21.76Z" },
-    { url = "https://files.pythonhosted.org/packages/d9/17/b1ea164327465cce2380640f095c995b3d7a0f0b7fd250e1018beac38bbc/nordlys_core-0.1.5-cp311-cp311-macosx_13_0_x86_64.whl", hash = "sha256:49cef3bad0e4f1ab8f365ae1cbf2bc68789c5bd09211b67370c913d07d6fac38", size = 807813, upload-time = "2026-01-09T22:59:23.782Z" },
-    { url = "https://files.pythonhosted.org/packages/9d/d2/55304080c23cc29619e324af13a80c0f754f5f2ed07639e0c010e1cac708/nordlys_core-0.1.5-cp311-cp311-manylinux_2_34_x86_64.whl", hash = "sha256:1733bae6ab163cfad40fa230ab5d7fe2ac17f5cfeb8ca21ba561f92c0764ca35", size = 3067220, upload-time = "2026-01-09T22:59:25.646Z" },
-    { url = "https://files.pythonhosted.org/packages/f8/f4/95560f2cefc25b78e1fc886aa1a81fd8325e197b7193e96cb209339ea4de/nordlys_core-0.1.5-cp311-cp311-win_amd64.whl", hash = "sha256:a527525494aac374433b6690ca42aa4529191434e2d08d0ede32aa8aca51bd5c", size = 5192001, upload-time = "2026-01-09T22:59:27.637Z" },
-    { url = "https://files.pythonhosted.org/packages/09/d1/c16c7a6a90641aa62a6a7baa6e5b55737af71307b2b9ac44fb67bd58c7bd/nordlys_core-0.1.5-cp312-cp312-macosx_13_0_arm64.whl", hash = "sha256:d3358f0b0856a72aacd63c51e2ae67aefa0db8c5ef11f033a97e5fae54a57a18", size = 799839, upload-time = "2026-01-09T22:59:29.421Z" },
-    { url = "https://files.pythonhosted.org/packages/9a/41/a8bcd1be787f14e14b0fade7ec00b0cb98135eddcff88b10812f1227d02d/nordlys_core-0.1.5-cp312-cp312-macosx_13_0_x86_64.whl", hash = "sha256:2d59624399418c1eb462caec468d417883b845a7784c8fc700a95401fb60e673", size = 807330, upload-time = "2026-01-09T22:59:31.147Z" },
-    { url = "https://files.pythonhosted.org/packages/36/27/f9e88b4430a93f23ce6878bb5511a555ee0436724ae4cd21d49be9f5e2af/nordlys_core-0.1.5-cp312-cp312-manylinux_2_34_x86_64.whl", hash = "sha256:595ddf9184950c2d312cd7c3ffb240e088333a2cc8f9cb2bf9a4e8ebd827c94c", size = 3066439, upload-time = "2026-01-09T22:59:32.968Z" },
-    { url = "https://files.pythonhosted.org/packages/1c/45/997f4ece93e020d0599745dd53f205bdccb415c173f90d57b5295bcf83a5/nordlys_core-0.1.5-cp312-cp312-win_amd64.whl", hash = "sha256:052af21c0835db11cd00a161d4b324b3cecf57a674045f1cc0d7c73d5af0142c", size = 5191493, upload-time = "2026-01-09T22:59:34.917Z" },
-    { url = "https://files.pythonhosted.org/packages/56/d2/f7ad456174e9820912a06654c06ca95e24c5d19aceb61a36835f49c0b79e/nordlys_core-0.1.5-cp313-cp313-macosx_13_0_arm64.whl", hash = "sha256:8c6c86fd5055e9c647e9006511ac81451539c429acbb9220d97713a182521e00", size = 799849, upload-time = "2026-01-09T22:59:36.823Z" },
-    { url = "https://files.pythonhosted.org/packages/08/5a/f19223390d0170add44818e22101e9ff7836fa603ad8e276706c7973f704/nordlys_core-0.1.5-cp313-cp313-macosx_13_0_x86_64.whl", hash = "sha256:902ac342248c1156c7262b3356efe5e1a4b1bfba2e0e5f6d0ac6653d0d406b57", size = 807242, upload-time = "2026-01-09T22:59:38.5Z" },
-    { url = "https://files.pythonhosted.org/packages/69/ad/718cd150b51466dfee305193992f4477cf8678f327b1de511753ddfc81fe/nordlys_core-0.1.5-cp313-cp313-manylinux_2_34_x86_64.whl", hash = "sha256:c600394b49f98d8da02595cdda37c6b6add3a9955e1fdf216c996e8f5fa4be17", size = 3066416, upload-time = "2026-01-09T22:59:40.327Z" },
-    { url = "https://files.pythonhosted.org/packages/b3/6c/0362acca5e527e6eba30fed63bcdaeacf0a2a7d7516a440b83412be8a6ec/nordlys_core-0.1.5-cp313-cp313-win_amd64.whl", hash = "sha256:c73c459a8520a7c74eda6c3008e217bde9c9a877cdeb501f707631ea873cf1f3", size = 5191445, upload-time = "2026-01-09T22:59:42.267Z" },
+    { url = "https://files.pythonhosted.org/packages/99/0d/186bdd862324d98c848f4f9d6a4bbf686529d11d52104f8f4127b2b0fcd2/nordlys_core-0.2.0-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:3a1281c45085f847fc74640324cd83b9840c3e314ea67ca5d68b2d51169f40ce", size = 820012, upload-time = "2026-01-11T11:47:30.792Z" },
+    { url = "https://files.pythonhosted.org/packages/06/32/43fe647bc110936db6a542a224644bdbcb31e8c08d8429c7860ff263e59f/nordlys_core-0.2.0-cp311-cp311-macosx_13_0_x86_64.whl", hash = "sha256:be06d55f396028a06aea31d518805a9dde437e79655fef314e15b93d16cc1815", size = 882660, upload-time = "2026-01-11T11:47:32.454Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/12/af37583fe480aec4526925674f18267d67ea8a91c9b8e4025e87a8eed32f/nordlys_core-0.2.0-cp311-cp311-manylinux_2_34_x86_64.whl", hash = "sha256:5b0b8374bd571aabda98deaa6bd9fdc9232612452e3c3c6edc946f8a1ef7f639", size = 3126920, upload-time = "2026-01-11T11:47:33.885Z" },
+    { url = "https://files.pythonhosted.org/packages/51/a8/59e7aa58be3ef02e6260f68d59708c6c9bcdbb5e0e0ad9687fd0d4516d5d/nordlys_core-0.2.0-cp311-cp311-win_amd64.whl", hash = "sha256:28faf895bcec106213ecd2359a0085bb97c414307e4a27a7cf42c3e203c53d79", size = 4641379, upload-time = "2026-01-11T11:47:35.319Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/7c/77bb1f2de4257c4e6197d804b3a84f88610c3315e9e262c41e5ba492625b/nordlys_core-0.2.0-cp312-cp312-macosx_13_0_arm64.whl", hash = "sha256:afb616154e53485d0a1367f3e50d5132bc20f8cfd384df81a613309fd6382ccf", size = 819299, upload-time = "2026-01-11T11:47:37.008Z" },
+    { url = "https://files.pythonhosted.org/packages/5f/b5/c2effe6bc98d53c62541c3dd1273db9ed293ee12ec79d5a90888b4b23de6/nordlys_core-0.2.0-cp312-cp312-macosx_13_0_x86_64.whl", hash = "sha256:4611d94444e222b002d10e87b683cd9234e85ddde0ff45ff14966c2af1fd8e0c", size = 882034, upload-time = "2026-01-11T11:47:38.281Z" },
+    { url = "https://files.pythonhosted.org/packages/27/e3/f7353d0d20ce5e0e1987b3698105179d2e9e787466fd92489027edd7b3f0/nordlys_core-0.2.0-cp312-cp312-manylinux_2_34_x86_64.whl", hash = "sha256:0068e16f9a3e9514578ed2ab6ff17c0ef0311186846dbf7e73c4e00110101067", size = 3125772, upload-time = "2026-01-11T11:47:39.558Z" },
+    { url = "https://files.pythonhosted.org/packages/f5/9d/3d4521e7d0ebc46398ea20c201ecca8bb3379137f7a289607865c11ac2f2/nordlys_core-0.2.0-cp312-cp312-win_amd64.whl", hash = "sha256:06ead1ba785cfb0723c2a1b36bc3fb8fb5e246cacf9963a551ef48aae2494f20", size = 4640929, upload-time = "2026-01-11T11:47:41.42Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/21/30693719f57a5891e7b68d78a53b12a067a1a06dc8fcdc5d4f01a1e0bd8d/nordlys_core-0.2.0-cp313-cp313-macosx_13_0_arm64.whl", hash = "sha256:83d7cf334d4223b861ce96a620768206cad933893e6754248ffbf95e39c7786b", size = 819288, upload-time = "2026-01-11T11:47:43.19Z" },
+    { url = "https://files.pythonhosted.org/packages/0d/1c/8a2c26a9e48fa73a71723b48195cd1201b884d0a41e5fff9469ab41ab696/nordlys_core-0.2.0-cp313-cp313-macosx_13_0_x86_64.whl", hash = "sha256:a5484659e933cfd114435d80f302d4689d3a45da701526e1f49ae6aa41769cd2", size = 881959, upload-time = "2026-01-11T11:47:44.596Z" },
+    { url = "https://files.pythonhosted.org/packages/42/e1/d17723d150b3a0ecfd29435cbc748eac186ebda1bfde5c5176ca2099cc8c/nordlys_core-0.2.0-cp313-cp313-manylinux_2_34_x86_64.whl", hash = "sha256:4c55d4486cf0eaf414c85b2e19444a5dd5dca08819bd3f905210da4ef235741d", size = 3125702, upload-time = "2026-01-11T11:47:46.59Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/ac/28af488aa79bae55eb77340d7d97dcfe83d6d0d9326acaad16b3f2d337b4/nordlys_core-0.2.0-cp313-cp313-win_amd64.whl", hash = "sha256:09b2f0b0ebbd9a4bbb6c6c211edd8178579b62bd29d86ad289d06d2690e08acb", size = 4640854, upload-time = "2026-01-11T11:47:48.299Z" },
 ]
 
 [[package]]
 name = "nordlys-core-cu12"
-version = "0.1.5"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b3/ff/2d01e334404af98a1041aff138af32620bb09e57a006370547e4a9b90694/nordlys_core_cu12-0.1.5-cp311-cp311-manylinux_2_34_x86_64.whl", hash = "sha256:57834c4a0527df69d1959e65e60aac0184d99aee8e53a34d9e0c96d8a6772813", size = 4147053, upload-time = "2026-01-09T22:59:44.221Z" },
-    { url = "https://files.pythonhosted.org/packages/37/52/5e85db59e8580792f79cd5013818c026038fff215d4e2e0dd7a05918b48f/nordlys_core_cu12-0.1.5-cp312-cp312-manylinux_2_34_x86_64.whl", hash = "sha256:11d112b828b14d368b0773baf7ed7a5119dbf269f9ef36feed97b9c5d77be25b", size = 4146089, upload-time = "2026-01-09T22:59:46.047Z" },
-    { url = "https://files.pythonhosted.org/packages/3c/08/c9b8646633241ee695833f847056d91f633cbe8257560764cef580a17928/nordlys_core_cu12-0.1.5-cp313-cp313-manylinux_2_34_x86_64.whl", hash = "sha256:06935e51620e1ccba8266af6a4fba7ae8d8581b90b663e962c3a121c2946f0af", size = 4145926, upload-time = "2026-01-09T22:59:48.048Z" },
+    { url = "https://files.pythonhosted.org/packages/96/5b/1f816982862a1cf00c38384545631cfb2402d3098374370ac37bfdc7410f/nordlys_core_cu12-0.2.0-cp311-cp311-manylinux_2_34_x86_64.whl", hash = "sha256:27d3809d3a1e59385e9c66e908a48a9869784f9b80a0c78d345a058771e4f0c4", size = 4689025, upload-time = "2026-01-11T11:47:50.171Z" },
+    { url = "https://files.pythonhosted.org/packages/4f/8d/16cd62d077c19d8f77ed2e6a41fe0a2c8465ba98af6ddbc2189115c7e198/nordlys_core_cu12-0.2.0-cp312-cp312-manylinux_2_34_x86_64.whl", hash = "sha256:509c47ac95dc698d8a23609ed79246913a4534e6a97fd88f9f2f13f4d4ebccc8", size = 4688465, upload-time = "2026-01-11T11:47:51.739Z" },
+    { url = "https://files.pythonhosted.org/packages/6b/5c/4b4aa0c4f2ce2b445042569f8b2e03b65be2fe73ca4e6ea4af541075a684/nordlys_core_cu12-0.2.0-cp313-cp313-manylinux_2_34_x86_64.whl", hash = "sha256:43be2e78461a37449d5519f5df8f29757caf4bd1afd07f610316273dd11f580a", size = 4688439, upload-time = "2026-01-11T11:47:53.294Z" },
 ]
 
 [[package]]

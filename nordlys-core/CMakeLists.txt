@@ -30,6 +30,10 @@ endif()
 
 # Project declaration
 if(NORDLYS_ENABLE_CUDA)
+  # Auto-detect CUDA architecture if not specified
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES native)
+  endif()
   project(nordlys_core VERSION ${NORDLYS_VERSION} LANGUAGES CXX CUDA)
 else()
   project(nordlys_core VERSION ${NORDLYS_VERSION} LANGUAGES CXX)

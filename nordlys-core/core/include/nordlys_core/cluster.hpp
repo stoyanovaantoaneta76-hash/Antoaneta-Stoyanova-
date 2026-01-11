@@ -34,7 +34,7 @@ public:
 
   [[nodiscard]] virtual std::vector<std::pair<int, Scalar>> assign_batch(const Scalar* embeddings,
                                                                          int count, int dim) {
-    if (count < 0 || dim <= 0) {
+    if (count < 0 || dim <= 0) [[unlikely]] {
       throw std::invalid_argument("count must be non-negative and dim must be positive");
     }
     std::vector<std::pair<int, Scalar>> results;
@@ -67,19 +67,19 @@ public:
   void load_centroids(const Scalar* data, int n_clusters, int dim) override {
     NORDLYS_ZONE_N("CpuClusterBackend::load_centroids");
 
-    if (n_clusters <= 0 || dim <= 0) {
+    if (n_clusters <= 0 || dim <= 0) [[unlikely]] {
       throw std::invalid_argument("n_clusters and dim must be positive");
     }
 
     auto nc = static_cast<size_t>(n_clusters);
     auto d = static_cast<size_t>(dim);
 
-    if (nc > SIZE_MAX / d) {
+    if (nc > SIZE_MAX / d) [[unlikely]] {
       throw std::invalid_argument("n_clusters * dim would overflow");
     }
 
     size_t total_size = nc * d;
-    if (total_size > SIZE_MAX / sizeof(Scalar)) {
+    if (total_size > SIZE_MAX / sizeof(Scalar)) [[unlikely]] {
       throw std::invalid_argument("allocation size would overflow");
     }
 
@@ -98,7 +98,7 @@ public:
     NORDLYS_ZONE_N("CpuClusterBackend::assign");
 
     if (n_clusters_ == 0) return {-1, Scalar{0}};
-    if (dim != dim_) {
+    if (dim != dim_) [[unlikely]] {
       throw std::invalid_argument("dimension mismatch in assign");
     }
 
@@ -153,10 +153,10 @@ public:
                                                                  int count, int dim) override {
     NORDLYS_ZONE_N("CpuClusterBackend::assign_batch");
 
-    if (count < 0) {
+    if (count < 0) [[unlikely]] {
       throw std::invalid_argument("count must be non-negative");
     }
-    if (n_clusters_ > 0 && dim != dim_) {
+    if (n_clusters_ > 0 && dim != dim_) [[unlikely]] {
       throw std::invalid_argument("dimension mismatch in assign_batch");
     }
 
@@ -330,13 +330,13 @@ template <typename Scalar>
 template <typename Scalar = float> class ClusterEngine {
 public:
   ClusterEngine() : backend_(create_cluster_backend<Scalar>(ClusterBackendType::Auto)) {
-    if (!backend_) {
+    if (!backend_) [[unlikely]] {
       throw std::runtime_error("failed to create cluster backend");
     }
   }
 
   explicit ClusterEngine(ClusterBackendType type) : backend_(create_cluster_backend<Scalar>(type)) {
-    if (!backend_) {
+    if (!backend_) [[unlikely]] {
       throw std::runtime_error("failed to create cluster backend");
     }
   }
@@ -344,7 +344,7 @@ public:
   void load_centroids(const EmbeddingMatrix<Scalar>& centers) {
     NORDLYS_ZONE;
     if (centers.rows() > static_cast<size_t>(std::numeric_limits<int>::max())
-        || centers.cols() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        || centers.cols() > static_cast<size_t>(std::numeric_limits<int>::max())) [[unlikely]] {
       throw std::invalid_argument("matrix dimensions exceed int range");
     }
     backend_->load_centroids(centers.data(), static_cast<int>(centers.rows()),
@@ -353,11 +353,11 @@ public:
 
   [[nodiscard]] auto assign(const Scalar* embedding, size_t dim) {
     NORDLYS_ZONE;
-    if (dim > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    if (dim > static_cast<size_t>(std::numeric_limits<int>::max())) [[unlikely]] {
       throw std::invalid_argument("dim exceeds int range");
     }
     int backend_dim = backend_->get_dim();
-    if (backend_dim > 0 && static_cast<int>(dim) != backend_dim) {
+    if (backend_dim > 0 && static_cast<int>(dim) != backend_dim) [[unlikely]] {
       throw std::invalid_argument("dimension mismatch: expected " + std::to_string(backend_dim)
                                   + ", got " + std::to_string(dim));
     }
@@ -367,11 +367,11 @@ public:
   [[nodiscard]] auto assign_batch(const Scalar* embeddings, size_t count, size_t dim) {
     NORDLYS_ZONE;
     if (count > static_cast<size_t>(std::numeric_limits<int>::max())
-        || dim > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        || dim > static_cast<size_t>(std::numeric_limits<int>::max())) [[unlikely]] {
       throw std::invalid_argument("count or dim exceeds int range");
     }
     int backend_dim = backend_->get_dim();
-    if (backend_dim > 0 && static_cast<int>(dim) != backend_dim) {
+    if (backend_dim > 0 && static_cast<int>(dim) != backend_dim) [[unlikely]] {
       throw std::invalid_argument("dimension mismatch: expected " + std::to_string(backend_dim)
                                   + ", got " + std::to_string(dim));
     }

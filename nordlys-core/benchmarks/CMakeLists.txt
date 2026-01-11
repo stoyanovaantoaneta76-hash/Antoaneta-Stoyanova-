@@ -58,6 +58,8 @@ add_dependencies(bench_nordlys_core copy_benchmark_fixtures)
 
 # CUDA Benchmarks (conditional, only if CUDA enabled)
 if(NORDLYS_ENABLE_CUDA)
+  find_package(CUDAToolkit REQUIRED)
+  
   add_executable(bench_nordlys_cuda
     bench_routing_cuda.cpp
   )
@@ -67,6 +69,8 @@ if(NORDLYS_ENABLE_CUDA)
       nordlys::core
       benchmark::benchmark
       benchmark::benchmark_main
+      CUDA::cudart
+      stdc++
       $<$<BOOL:${NORDLYS_ENABLE_TRACY}>:Tracy::TracyClient>
   )
   

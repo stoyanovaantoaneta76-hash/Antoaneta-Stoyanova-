@@ -4,6 +4,8 @@
 
 #  include <nordlys_core/nordlys.hpp>
 
+#  include <random>
+
 #  include "bench_utils.hpp"
 
 static NordlysCheckpoint LoadCheckpoint(const std::string& profile_name) {
@@ -87,19 +89,27 @@ static void BM_RoutingGPU_Batch(benchmark::State& state) {
   }
 
   auto router = std::move(router_result.value());
-  const int batch_size = state.range(0);
-  auto embeddings = bench_utils::GenerateBatchEmbeddings(batch_size, router.get_embedding_dim());
+  const size_t batch_size = static_cast<size_t>(state.range(0));
+  const size_t dim = router.get_embedding_dim();
 
-  for (auto _ : state) {
-    for (const auto& emb : embeddings) {
-      auto result = router.route(emb.data(), emb.size(), 0.5f);
-      benchmark::DoNotOptimize(result);
-    }
+  std::vector<float> flat_embeddings(batch_size * dim);
+  std::mt19937 gen(42);
+  std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+  for (size_t i = 0; i < flat_embeddings.size(); ++i) {
+    flat_embeddings[i] = dist(gen);
   }
 
-  state.SetItemsProcessed(state.iterations() * batch_size);
+  for (auto _ : state) {
+    auto results = router.route_batch(flat_embeddings.data(), batch_size, dim, 0.5f);
+    benchmark::DoNotOptimize(results);
+  }
+
+  state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(batch_size));
 }
-BENCHMARK(BM_RoutingGPU_Batch)->Arg(10)->Arg(100)->Arg(1000)->Unit(benchmark::kMillisecond);
+BENCHMARK(BM_RoutingGPU_Batch)
+    ->Arg(1)->Arg(2)->Arg(4)->Arg(8)->Arg(16)->Arg(32)->Arg(64)
+    ->Arg(128)->Arg(256)->Arg(512)->Arg(1024)->Arg(2048)->Arg(4096)
+    ->Unit(benchmark::kMicrosecond);
 
 static void BM_GPUTransferOverhead_Medium(benchmark::State& state) {
   NORDLYS_ZONE;

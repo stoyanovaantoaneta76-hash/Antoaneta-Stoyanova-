@@ -8,7 +8,7 @@
 // Forward declaration
 template <typename T, typename E> class Result;
 
-/// Helper class to create error result (similar to std::unexpected)
+/// Helper class to create error result (similar to std::unexpected in C++23)
 template <typename E> class Unexpected {
 public:
   explicit constexpr Unexpected(const E& err) : error_(err) {}
@@ -25,8 +25,9 @@ private:
 // Deduction guide
 template <typename E> Unexpected(E) -> Unexpected<E>;
 
-/// C++20-compatible Result<T, E> type as replacement for std::expected
-/// Provides similar API to std::expected for error handling
+/// C++20-compatible Result<T, E> type as a polyfill for std::expected (C++23).
+/// Provides a similar API to std::expected for monadic error handling.
+/// When upgrading to C++23, this can be replaced with std::expected<T, E>.
 template <typename T, typename E> class Result {
 public:
   // Constructors for success value
@@ -48,21 +49,21 @@ public:
 
   // Access value (throws if error)
   [[nodiscard]] constexpr T& value() & {
-    if (!has_value()) {
+    if (!has_value()) [[unlikely]] {
       throw std::runtime_error("Result contains error");
     }
     return std::get<T>(storage_);
   }
 
   [[nodiscard]] constexpr const T& value() const& {
-    if (!has_value()) {
+    if (!has_value()) [[unlikely]] {
       throw std::runtime_error("Result contains error");
     }
     return std::get<T>(storage_);
   }
 
   [[nodiscard]] constexpr T&& value() && {
-    if (!has_value()) {
+    if (!has_value()) [[unlikely]] {
       throw std::runtime_error("Result contains error");
     }
     return std::get<T>(std::move(storage_));
@@ -70,14 +71,14 @@ public:
 
   // Access error (throws if value)
   [[nodiscard]] constexpr E& error() & {
-    if (has_value()) {
+    if (has_value()) [[unlikely]] {
       throw std::runtime_error("Result contains value");
     }
     return std::get<E>(storage_);
   }
 
   [[nodiscard]] constexpr const E& error() const& {
-    if (has_value()) {
+    if (has_value()) [[unlikely]] {
       throw std::runtime_error("Result contains value");
     }
     return std::get<E>(storage_);
