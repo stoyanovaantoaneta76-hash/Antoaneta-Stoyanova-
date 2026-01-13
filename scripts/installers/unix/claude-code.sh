@@ -41,6 +41,36 @@ log_error() {
   echo "❌ $*" >&2
 }
 
+show_usage() {
+  cat <<EOF
+Usage: $0 [OPTIONS]
+
+Options:
+  --api-key, -k <key>    Nordlys API key (non-interactive, takes precedence)
+  --help, -h             Show this help message
+
+Environment Variables:
+  NORDLYS_API_KEY                API key (fallback if --api-key not provided)
+  NORDLYS_PRIMARY_MODEL          Primary model override
+  NORDLYS_FAST_MODEL             Fast model override
+  NORDLYS_DEFAULT_OPUS_MODEL     Opus model override
+  NORDLYS_DEFAULT_SONNET_MODEL   Sonnet model override
+  NORDLYS_DEFAULT_HAIKU_MODEL    Haiku model override
+  NORDLYS_CLAUDE_CODE_SUBAGENT   Claude Code subagent model override
+
+Examples:
+  # Interactive setup
+  $0
+
+  # Non-interactive with API key
+  $0 --api-key "your-api-key-here"
+
+  # Via environment variable
+  export NORDLYS_API_KEY="your-api-key-here"
+  $0
+EOF
+}
+
 ensure_dir_exists() {
   local dir="$1"
   if [ ! -d "$dir" ]; then
@@ -197,8 +227,13 @@ configure_claude() {
   log_info "Configuring Claude Code for Nordlys..."
   echo "   You can get your API key from: $API_KEY_URL"
 
-  # Check for environment variable first
-  local api_key="${NORDLYS_API_KEY:-}"
+  # Check for CLI flag first (highest priority)
+  local api_key="${CLI_API_KEY:-}"
+
+  # Then check for environment variable
+  if [ -z "$api_key" ]; then
+    api_key="${NORDLYS_API_KEY:-}"
+  fi
 
   # Check for model overrides
   local primary_model="${NORDLYS_PRIMARY_MODEL:-$DEFAULT_PRIMARY_MODEL}"
@@ -226,9 +261,9 @@ configure_claude() {
   fi
 
   if [ -n "$api_key" ]; then
-    log_info "Using API key from NORDLYS_API_KEY environment variable"
+    log_info "Using API key from CLI flag or NORDLYS_API_KEY environment variable"
     if ! validate_api_key "$api_key"; then
-      log_error "Invalid API key format in NORDLYS_API_KEY environment variable"
+      log_error "Invalid API key format"
       exit 1
     fi
   # Check if running in non-interactive mode (e.g., piped from curl)
@@ -241,17 +276,20 @@ configure_claude() {
     echo "   chmod +x claude-code.sh"
     echo "   ./claude-code.sh"
     echo ""
-    echo "🔑 Option 2: Set API key via environment variable"
+    echo "🔑 Option 2: Set API key via CLI flag"
+    echo "   ./claude-code.sh --api-key 'your-api-key-here'"
+    echo ""
+    echo "🔑 Option 3: Set API key via environment variable"
     echo "   export NORDLYS_API_KEY='your-api-key-here'"
     echo "   curl -fsSL https://raw.githubusercontent.com/Egham-7/nordlys/main/scripts/installers/unix/claude-code.sh | bash"
     echo ""
-    echo "🎯 Option 3: Customize models (Advanced)"
+    echo "🎯 Option 4: Customize models (Advanced)"
     echo "   export NORDLYS_API_KEY='your-api-key-here'"
     echo "   export NORDLYS_PRIMARY_MODEL='nordlys/hypernova'"
     echo "   export NORDLYS_FAST_MODEL='nordlys/hypernova'"
     echo "   curl -fsSL https://raw.githubusercontent.com/Egham-7/nordlys/main/scripts/installers/unix/claude-code.sh | bash"
     echo ""
-     echo "⚙️  Option 4: Manual configuration (Advanced users)"
+     echo "⚙️  Option 5: Manual configuration (Advanced users)"
      echo "   mkdir -p ~/.claude"
      echo "   cat > ~/.claude/settings.json << 'EOF'"
      echo "{"
@@ -385,6 +423,27 @@ verify_installation() {
 }
 
 main() {
+  # Parse command line arguments
+  CLI_API_KEY=""
+  
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --api-key|-k)
+        CLI_API_KEY="$2"
+        shift 2
+        ;;
+      --help|-h)
+        show_usage
+        exit 0
+        ;;
+      *)
+        log_error "Unknown option: $1"
+        show_usage
+        exit 1
+        ;;
+    esac
+  done
+
   show_banner
 
   check_nodejs

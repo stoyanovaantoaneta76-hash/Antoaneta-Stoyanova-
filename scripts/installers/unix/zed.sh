@@ -31,6 +31,30 @@ log_error() {
 	echo "❌ $*" >&2
 }
 
+show_usage() {
+	cat <<EOF
+Usage: $0 [OPTIONS]
+
+Options:
+	--api-key, -k <key>    Nordlys API key (non-interactive, takes precedence)
+	--help, -h             Show this help message
+
+Environment Variables:
+	NORDLYS_API_KEY        API key (fallback if --api-key not provided)
+
+Examples:
+	# Interactive setup
+	$0
+
+	# Non-interactive with API key
+	$0 --api-key "your-api-key-here"
+
+	# Via environment variable
+	export NORDLYS_API_KEY="your-api-key-here"
+	$0
+EOF
+}
+
 ensure_dir_exists() {
 	local dir="$1"
 	if [ ! -d "$dir" ]; then
@@ -88,7 +112,13 @@ check_zed_installed() {
 # ========================
 
 get_api_key() {
-	local api_key="$NORDLYS_API_KEY"
+	# Check for CLI flag first (highest priority)
+	local api_key="${CLI_API_KEY:-}"
+
+	# Then check for environment variable
+	if [ -z "$api_key" ]; then
+		api_key="${NORDLYS_API_KEY:-}"
+	fi
 
 	if [ -z "$api_key" ]; then
 		log_info "API key not found in environment"
@@ -238,6 +268,27 @@ setup_environment() {
 # ========================
 
 main() {
+	# Parse command line arguments
+	CLI_API_KEY=""
+	
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+			--api-key|-k)
+				CLI_API_KEY="$2"
+				shift 2
+				;;
+			--help|-h)
+				show_usage
+				exit 0
+				;;
+			*)
+				log_error "Unknown option: $1"
+				show_usage
+				exit 1
+				;;
+		esac
+	done
+
 	echo ""
 	echo "═══════════════════════════════════════════════"
 	echo "  $SCRIPT_NAME v$SCRIPT_VERSION"

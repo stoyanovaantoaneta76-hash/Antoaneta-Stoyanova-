@@ -34,6 +34,34 @@ log_success() { echo "✅ $*"; }
 log_error()   { echo "❌ $*" >&2; }
 
 # ========================
+#     Usage/Help
+# ========================
+show_usage() {
+  cat <<EOF
+Usage: $0 [OPTIONS]
+
+Options:
+  --api-key, -k <key>    Nordlys API key (non-interactive, takes precedence)
+  --help, -h             Show this help message
+
+Environment Variables:
+  NORDLYS_API_KEY        API key (fallback if --api-key not provided)
+  NORDLYS_MODEL          Model override (e.g., nordlys/hypernova)
+
+Examples:
+  # Interactive setup
+  $0
+
+  # Non-interactive with API key
+  $0 --api-key "your-api-key-here"
+
+  # Via environment variable
+  export NORDLYS_API_KEY="your-api-key-here"
+  $0
+EOF
+}
+
+# ========================
 #     Node.js helpers
 # ========================
 install_nodejs_windows() {
@@ -165,16 +193,25 @@ validate_model_override() {
 #     API Key Configuration
 # ========================
 get_api_key() {
-  local api_key="${NORDLYS_API_KEY:-}"
+  local api_key=""
 
-  # If API key is already set in env, validate and return it
+  # Check for CLI flag first (highest priority)
+  if [ -n "${CLI_API_KEY:-}" ]; then
+    api_key="$CLI_API_KEY"
+    log_success "Using API key from --api-key CLI flag" >&2
+  # Then check for environment variable
+  elif [ -n "${NORDLYS_API_KEY:-}" ]; then
+    api_key="$NORDLYS_API_KEY"
+    log_success "Using API key from NORDLYS_API_KEY environment variable" >&2
+  fi
+
+  # If API key is already set (from CLI or env), validate and return it
   if [ -n "$api_key" ]; then
     if validate_api_key "$api_key"; then
-      log_success "Using API key from NORDLYS_API_KEY environment variable" >&2
       echo "$api_key"
       return 0
     else
-      log_error "NORDLYS_API_KEY format looks invalid. Re-check your key."
+      log_error "API key format looks invalid. Re-check your key."
       exit 1
     fi
   fi
@@ -189,7 +226,10 @@ get_api_key() {
     echo "   chmod +x opencode.sh" >&2
     echo "   ./opencode.sh" >&2
     echo "" >&2
-    echo "🔑 Option 2: Set API key via environment variable" >&2
+    echo "🔑 Option 2: Set API key via CLI flag" >&2
+    echo "   ./opencode.sh --api-key 'your-api-key-here'" >&2
+    echo "" >&2
+    echo "🔑 Option 3: Set API key via environment variable" >&2
     echo "   export NORDLYS_API_KEY='your-api-key-here'" >&2
     echo "   curl -fsSL https://raw.githubusercontent.com/Nordlys-Labs/nordlys/main/scripts/installers/unix/opencode.sh | bash" >&2
     echo "" >&2
@@ -339,6 +379,27 @@ show_banner() {
 }
 
 main() {
+  # Parse command line arguments
+  CLI_API_KEY=""
+  
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --api-key|-k)
+        CLI_API_KEY="$2"
+        shift 2
+        ;;
+      --help|-h)
+        show_usage
+        exit 0
+        ;;
+      *)
+        log_error "Unknown option: $1"
+        show_usage
+        exit 1
+        ;;
+    esac
+  done
+
   show_banner
 
   # 1) Node & npm
@@ -347,7 +408,7 @@ main() {
   # 2) OpenCode CLI
   install_opencode
 
-  # 3) Get API key (from env or prompt)
+  # 3) Get API key (from CLI flag, env, or prompt)
   local api_key
   api_key=$(get_api_key)
 
