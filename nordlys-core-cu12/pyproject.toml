@@ -27,6 +27,7 @@ cmake.source-dir = "../nordlys-core"
 [tool.scikit-build.cmake.define]
 CMAKE_EXPORT_COMPILE_COMMANDS = "ON"
 CMAKE_CXX_STANDARD = "20"
+CMAKE_CUDA_COMPILER = "/usr/local/cuda-12.9/bin/nvcc"
 NORDLYS_ENABLE_CUDA = "ON"
 
 [tool.scikit-build-core-conan]

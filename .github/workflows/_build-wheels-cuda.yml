@@ -65,12 +65,7 @@ jobs:
             ln -s /usr/local/cuda-12.9 /usr/local/cuda || true &&
             dnf clean all
           CIBW_BEFORE_BUILD: "pip install conan && conan profile detect --force"
-          CIBW_ENVIRONMENT: >
-            NORDLYS_ENABLE_CUDA=ON
-            CUDACXX=/usr/local/cuda-12.9/bin/nvcc
-            CUDAToolkit_ROOT=/usr/local/cuda-12.9
-            PATH=/usr/local/cuda-12.9/bin:/usr/local/cuda/bin:$PATH
-            LD_LIBRARY_PATH=/usr/local/cuda-12.9/lib64:$LD_LIBRARY_PATH
+          CIBW_ENVIRONMENT: "NORDLYS_ENABLE_CUDA=ON CUDACXX=/usr/local/cuda-12.9/bin/nvcc CMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc CUDAToolkit_ROOT=/usr/local/cuda-12.9 PATH=/usr/local/cuda-12.9/bin:/usr/local/cuda/bin:$PATH LD_LIBRARY_PATH=/usr/local/cuda-12.9/lib64:$LD_LIBRARY_PATH"
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: >
             auditwheel repair --strip
             --exclude libcuda.so.1

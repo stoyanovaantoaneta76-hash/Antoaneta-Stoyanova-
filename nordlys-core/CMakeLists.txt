@@ -17,7 +17,7 @@ option(NORDLYS_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
 option(NORDLYS_BUILD_BENCHMARKS "Build benchmark suite" OFF)
 option(NORDLYS_ENABLE_TRACY "Enable Tracy profiler integration" OFF)
 
-# CUDA auto-detection
+# CUDA auto-detection and configuration
 if(NORDLYS_ENABLE_CUDA STREQUAL "AUTO")
   include(CheckLanguage)
   check_language(CUDA)
@@ -25,6 +25,12 @@ if(NORDLYS_ENABLE_CUDA STREQUAL "AUTO")
     set(NORDLYS_ENABLE_CUDA ON)
   else()
     set(NORDLYS_ENABLE_CUDA OFF)
+  endif()
+elseif(NORDLYS_ENABLE_CUDA)
+  # When CUDA is explicitly enabled, set CMAKE_CUDA_COMPILER if not already set
+  # This handles environment variables like CUDACXX set by CI/build systems
+  if(NOT CMAKE_CUDA_COMPILER AND DEFINED ENV{CUDACXX})
+    set(CMAKE_CUDA_COMPILER $ENV{CUDACXX})
   endif()
 endif()
 
