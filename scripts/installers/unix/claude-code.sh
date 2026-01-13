@@ -425,27 +425,37 @@ verify_installation() {
 }
 
 launch_tool() {
-   log_info "Launching Claude Code..."
-   
-   # Try to launch Claude Code
-   if command -v claude &>/dev/null; then
-     # Run in foreground for best UX
-     claude || {
-       log_error "Failed to launch Claude Code"
-       echo ""
-       echo "🔧 To launch manually, run:"
-       echo "   claude"
-       echo ""
-       return 1
-     }
-   else
-     log_error "Claude Code command not found"
-     echo ""
-     echo "🔧 To launch manually after PATH refresh, run:"
-     echo "   claude"
-     echo ""
-     return 1
-   fi
+    log_info "Launching Claude Code..."
+    
+    # Check if we're in an interactive terminal
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
+        log_info "Non-interactive terminal detected, skipping auto-launch"
+        echo ""
+        echo "🔧 To launch manually, run:"
+        echo "   claude"
+        echo ""
+        return 0
+    fi
+    
+    # Try to launch Claude Code
+    if command -v claude &>/dev/null; then
+      # Run in foreground for best UX
+      claude || {
+        log_error "Failed to launch Claude Code"
+        echo ""
+        echo "🔧 To launch manually, run:"
+        echo "   claude"
+        echo ""
+        return 1
+      }
+    else
+      log_error "Claude Code command not found"
+      echo ""
+      echo "🔧 To launch manually after PATH refresh, run:"
+      echo "   claude"
+      echo ""
+      return 1
+    fi
 }
 
 main() {

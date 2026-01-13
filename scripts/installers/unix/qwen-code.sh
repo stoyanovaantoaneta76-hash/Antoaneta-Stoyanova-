@@ -481,6 +481,16 @@ verify_installation() {
 launch_tool() {
 	log_info "Launching Qwen Code..."
 	
+	# Check if we're in an interactive terminal
+	if [ ! -t 0 ] || [ ! -t 1 ]; then
+		log_info "Non-interactive terminal detected, skipping auto-launch"
+		echo ""
+		echo "🔧 To launch manually, run:"
+		echo "   qwen"
+		echo ""
+		return 0
+	fi
+	
 	# Try to launch Qwen Code
 	if command -v qwen &>/dev/null; then
 		# Run in foreground for best UX

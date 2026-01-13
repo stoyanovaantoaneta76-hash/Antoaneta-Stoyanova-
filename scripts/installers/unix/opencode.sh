@@ -368,25 +368,35 @@ verify_installation() {
 }
 
 launch_tool() {
-   log_info "Launching opencode..."
-   
-   if command -v opencode &>/dev/null; then
-     opencode || {
-       log_error "Failed to launch opencode"
-       echo ""
-       echo "🔧 To launch manually, run:"
-       echo "   opencode"
-       echo ""
-       return 1
-     }
-   else
-     log_error "opencode command not found"
-     echo ""
-     echo "🔧 To launch manually after PATH refresh, run:"
-     echo "   opencode"
-     echo ""
-     return 1
-   fi
+    log_info "Launching opencode..."
+    
+    # Check if we're in an interactive terminal
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
+        log_info "Non-interactive terminal detected, skipping auto-launch"
+        echo ""
+        echo "🔧 To launch manually, run:"
+        echo "   opencode"
+        echo ""
+        return 0
+    fi
+    
+    if command -v opencode &>/dev/null; then
+      opencode || {
+        log_error "Failed to launch opencode"
+        echo ""
+        echo "🔧 To launch manually, run:"
+        echo "   opencode"
+        echo ""
+        return 1
+      }
+    else
+      log_error "opencode command not found"
+      echo ""
+      echo "🔧 To launch manually after PATH refresh, run:"
+      echo "   opencode"
+      echo ""
+      return 1
+    fi
 }
 
 # ========================
