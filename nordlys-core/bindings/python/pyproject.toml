@@ -44,7 +44,7 @@ NORDLYS_ENABLE_CUDA = "OFF"
 [tool.scikit-build-core-conan]
 path = "../.."
 build = "missing"
-settings = ["compiler.cppstd=20"]
+settings = { "compiler.cppstd" = "20" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

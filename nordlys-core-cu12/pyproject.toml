@@ -33,4 +33,4 @@ NORDLYS_ENABLE_CUDA = "ON"
 [tool.scikit-build-core-conan]
 path = "../nordlys-core"
 build = "missing"
-settings = ["compiler.cppstd=20"]
+settings = { "compiler.cppstd" = "20" }
