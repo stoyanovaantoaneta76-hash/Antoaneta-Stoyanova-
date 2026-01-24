@@ -101,10 +101,6 @@ jobs:
       - name: Install build tools
         run: uv pip install conan --system
 
-      - name: Install Python test dependencies
-        working-directory: nordlys-core/bindings/python
-        run: uv sync --group test --no-install-project
-
       - name: Setup Conan profile
         run: conan profile detect --force
 
@@ -128,9 +124,23 @@ jobs:
         working-directory: nordlys-core
         run: cmake --build --preset conan-release --parallel --target nordlys_core_ext
 
+      - name: Install Python test dependencies
+        working-directory: nordlys-core/bindings/python
+        env:
+          PYTHONPATH: ${{ github.workspace }}/nordlys-core/build/Release
+        run: |
+          uv sync --group test --no-install-project
+
+      - name: Install Python package (skip build)
+        working-directory: nordlys-core/bindings/python
+        env:
+          PYTHONPATH: ${{ github.workspace }}/nordlys-core/build/Release
+        run: |
+          uv pip install -e . --no-build-isolation --no-deps
+
       - name: Run Python tests
         working-directory: nordlys-core/bindings/python
         env:
           PYTHONPATH: ${{ github.workspace }}/nordlys-core/build/Release
         run: |
-          uv run --no-install-project pytest tests/ -v --tb=short
+          uv run pytest tests/ -v --tb=short
