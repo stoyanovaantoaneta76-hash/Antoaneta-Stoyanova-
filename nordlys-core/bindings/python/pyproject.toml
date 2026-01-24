@@ -16,6 +16,9 @@ authors = [{ name = "Botir Khaltaev", email = "botirkhaltaev@llmadaptive.uk" }]
 dependencies = ["numpy>=2.0"]
 
 
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
 [dependency-groups]
 test = ["pytest>=8.0"]
 
