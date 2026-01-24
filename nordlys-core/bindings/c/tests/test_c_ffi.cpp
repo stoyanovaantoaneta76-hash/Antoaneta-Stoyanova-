@@ -98,7 +98,7 @@ protected:
 
   void SetUp() override {
     // Create router from JSON string for testing
-    router_ = nordlys_router_create_from_json(kTestProfileJson);
+    router_ = nordlys_router_create_from_json(kTestProfileJson, NORDLYS_DEVICE_CPU);
     ASSERT_NE(router_, nullptr) << "Failed to create router from JSON";
   }
 
@@ -111,17 +111,17 @@ protected:
 };
 
 TEST_F(CFFITest, RouterCreationFailsWithInvalidPath) {
-  NordlysRouter* router = nordlys_router_create("nonexistent_file.json");
+  NordlysRouter* router = nordlys_router_create("nonexistent_file.json", NORDLYS_DEVICE_CPU);
   EXPECT_EQ(router, nullptr);
 }
 
 TEST_F(CFFITest, RouterCreationFromJsonStringFailsWithInvalidJson) {
-  NordlysRouter* router = nordlys_router_create_from_json("invalid json");
+  NordlysRouter* router = nordlys_router_create_from_json("invalid json", NORDLYS_DEVICE_CPU);
   EXPECT_EQ(router, nullptr);
 }
 
 TEST_F(CFFITest, RouterCreationFromBinaryFailsWithInvalidPath) {
-  NordlysRouter* router = nordlys_router_create_from_msgpack("nonexistent_file.msgpack");
+  NordlysRouter* router = nordlys_router_create_from_msgpack("nonexistent_file.msgpack", NORDLYS_DEVICE_CPU);
   EXPECT_EQ(router, nullptr);
 }
 
@@ -369,7 +369,7 @@ protected:
   NordlysRouter* router_ = nullptr;
 
   void SetUp() override {
-    router_ = nordlys_router_create_from_json(kTestProfileJsonFloat64);
+    router_ = nordlys_router_create_from_json(kTestProfileJsonFloat64, NORDLYS_DEVICE_CPU);
     ASSERT_NE(router_, nullptr) << "Failed to create float64 router from JSON";
   }
 
