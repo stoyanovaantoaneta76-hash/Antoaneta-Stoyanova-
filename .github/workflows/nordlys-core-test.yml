@@ -133,4 +133,4 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/nordlys-core/build/Release
         run: |
-          uv run pytest tests/ -v --tb=short
+          uv run --no-install-project pytest tests/ -v --tb=short
