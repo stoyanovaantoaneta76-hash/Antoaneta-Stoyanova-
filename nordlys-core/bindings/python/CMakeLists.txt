@@ -17,4 +17,9 @@ nanobind_add_module(_core NB_STATIC
 target_link_libraries(_core PRIVATE nordlys::core)
 target_compile_definitions(_core PRIVATE NORDLYS_VERSION="${PROJECT_VERSION}")
 
+# Output the module directly into src/nordlys_core/ for development/testing
+set_target_properties(_core PROPERTIES
+  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/nordlys_core"
+)
+
 install(TARGETS _core LIBRARY DESTINATION .)
