@@ -169,6 +169,7 @@ private:
                              .cluster_distance = dist};
 
     if (scores.size() > 1) {
+      resp.alternatives.reserve(scores.size() - 1);
       auto alts = scores | std::views::drop(1) | std::views::transform(&ModelScore::model_id);
       resp.alternatives.assign(alts.begin(), alts.end());
     }
@@ -184,7 +185,9 @@ private:
     }
 
     auto assignments = engine_.assign_batch(data, count, dim);
-    std::vector<RouteResult<Scalar>> results(count);
+    std::vector<RouteResult<Scalar>> results;
+    results.reserve(count);
+    results.resize(count);
     bool has_invalid = false;
     const auto n = std::ssize(results);
 
@@ -202,13 +205,16 @@ private:
 
       auto scores = scorer_.score_models(cid, cost_bias, models);
 
+      std::vector<std::string> alternatives;
+      if (scores.size() > 1) {
+        alternatives.reserve(scores.size() - 1);
+        auto alts = scores | std::views::drop(1) | std::views::transform(&ModelScore::model_id);
+        alternatives.assign(alts.begin(), alts.end());
+      }
+
       results[static_cast<size_t>(i)] = RouteResult<Scalar>{
           .selected_model = scores.empty() ? std::string{} : scores[0].model_id,
-          .alternatives = [&]() -> std::vector<std::string> {
-            if (scores.size() <= 1) return {};
-            auto alts = scores | std::views::drop(1) | std::views::transform(&ModelScore::model_id);
-            return {alts.begin(), alts.end()};
-          }(),
+          .alternatives = std::move(alternatives),
           .cluster_id = cid,
           .cluster_distance = dist};
     }

@@ -18,20 +18,16 @@ std::vector<ModelScore> ModelScorer::score_models(int cluster_id, float cost_bia
     return {};
   }
 
-  auto cost_projection = [](const ModelFeatures& m) { return m.cost_per_1m_tokens(); };
-  auto [min_it, max_it] = std::ranges::minmax_element(models, {}, cost_projection);
-  float min_cost = cost_projection(*min_it);
-  float max_cost = cost_projection(*max_it);
-  float cost_range = max_cost - min_cost;
-
-  auto normalize_cost = [=](float cost) {
-    if (cost_range <= 0.0f) return 0.0f;
-    return (cost - min_cost) / cost_range;
-  };
+  // Single-pass: find min/max cost and compute scores simultaneously
+  float min_cost = std::numeric_limits<float>::max();
+  float max_cost = std::numeric_limits<float>::lowest();
+  std::vector<ModelScore> scores;
+  scores.reserve(models.size());
 
   float lambda = lambda_min + cost_bias * (lambda_max - lambda_min);
 
-  auto create_score = [&](const ModelFeatures& model) -> ModelScore {
+  // First pass: compute scores and track min/max cost
+  for (const auto& model : models) {
     if (cluster_id >= static_cast<int>(model.error_rates.size())) {
       throw std::invalid_argument(
           std::format("cluster_id {} is out of bounds for model '{}' which has {} error rates",
@@ -40,19 +36,33 @@ std::vector<ModelScore> ModelScorer::score_models(int cluster_id, float cost_bia
 
     float error_rate = model.error_rates[static_cast<std::size_t>(cluster_id)];
     float cost = model.cost_per_1m_tokens();
-    float normalized = normalize_cost(cost);
-    float score = error_rate + lambda * normalized;
+    
+    // Track min/max cost
+    if (cost < min_cost) min_cost = cost;
+    if (cost > max_cost) max_cost = cost;
 
-    return ModelScore{.model_id = model.model_id,
-                      .score = score,
-                      .error_rate = error_rate,
-                      .accuracy = 1.0f - error_rate,
-                      .cost = cost,
-                      .normalized_cost = normalized};
+    // Store score with unnormalized cost for now
+    scores.push_back(ModelScore{.model_id = model.model_id,
+                                .score = 0.0f,  // Will compute after normalization
+                                .error_rate = error_rate,
+                                .accuracy = 1.0f - error_rate,
+                                .cost = cost,
+                                .normalized_cost = 0.0f});  // Will compute after normalization
+  }
+
+  // Compute cost range and normalize
+  float cost_range = max_cost - min_cost;
+  auto normalize_cost = [=](float cost) {
+    if (cost_range <= 0.0f) return 0.0f;
+    return (cost - min_cost) / cost_range;
   };
 
-  auto scored = models | std::views::transform(create_score);
-  std::vector<ModelScore> scores(scored.begin(), scored.end());
+  // Second pass: normalize costs and compute final scores
+  for (auto& score : scores) {
+    score.normalized_cost = normalize_cost(score.cost);
+    score.score = score.error_rate + lambda * score.normalized_cost;
+  }
+
   std::ranges::sort(scores, {}, &ModelScore::score);
 
   return scores;

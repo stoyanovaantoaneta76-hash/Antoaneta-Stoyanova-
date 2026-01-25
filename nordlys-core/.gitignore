@@ -1,3 +1,48 @@
 build-test/
 build-profile/
 build/
+_deps/
+*.a
+
+# CMake build artifacts
+CMakeFiles/
+cmake_install.cmake
+CMakeCache.txt
+CMakeInit.txt
+build.ninja
+.ninja_log
+*.ninja
+*.ninja_deps
+.cmake/
+
+# Object files
+*.o
+*.obj
+
+# Static libraries (already covered by *.a but being explicit)
+*.lib
+
+# Python build artifacts
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+*.egg-info
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Compilation database
+compile_commands.json
+.skbuild-info.json

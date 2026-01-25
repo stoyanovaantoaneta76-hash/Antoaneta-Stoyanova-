@@ -62,6 +62,27 @@ protected:
 #  include <usearch/index.hpp>
 #  include <usearch/index_dense.hpp>
 
+// Helper struct for OpenMP custom reduction
+template <typename Scalar> struct MinDistanceResult {
+  Scalar dist_sq;
+  int idx;
+};
+
+// Declare custom OpenMP reduction for MinDistanceResult
+// Note: We declare explicit reductions for float and double to ensure compatibility
+// Template-based reductions have limited compiler support
+#  ifdef _OPENMP
+// For float
+#    pragma omp declare reduction(custom_min_float:MinDistanceResult<float>: \
+      omp_out = (omp_in.dist_sq < omp_out.dist_sq) ? omp_in : omp_out) \
+      initializer(omp_priv = {std::numeric_limits<float>::max(), -1})
+
+// For double  
+#    pragma omp declare reduction(custom_min_double:MinDistanceResult<double>: \
+      omp_out = (omp_in.dist_sq < omp_out.dist_sq) ? omp_in : omp_out) \
+      initializer(omp_priv = {std::numeric_limits<double>::max(), -1})
+#  endif
+
 template <typename Scalar> class CpuClusterBackend : public IClusterBackend<Scalar> {
 public:
   void load_centroids(const Scalar* data, int n_clusters, int dim) override {
@@ -108,28 +129,58 @@ public:
     Scalar best_dist_sq = std::numeric_limits<Scalar>::max();
 
 #  ifdef _OPENMP
-#    pragma omp parallel
-    {
-      int local_idx = -1;
-      Scalar local_dist_sq = std::numeric_limits<Scalar>::max();
+    if (n_clusters_ > 100) {
+      MinDistanceResult<Scalar> result{std::numeric_limits<Scalar>::max(), -1};
 
-#    pragma omp for nowait
+      if constexpr (std::is_same_v<Scalar, float>) {
+#      pragma omp parallel for reduction(custom_min_float:result)
+        for (int i = 0; i < n_clusters_; ++i) {
+          const auto* centroid_bytes
+              = reinterpret_cast<const unum::usearch::byte_t*>(centroids_.data() + i * dim_);
+          auto dist_sq = static_cast<Scalar>(metric_(emb_bytes, centroid_bytes));
+
+          if (dist_sq < result.dist_sq) {
+            result.dist_sq = dist_sq;
+            result.idx = i;
+          }
+        }
+      } else if constexpr (std::is_same_v<Scalar, double>) {
+#      pragma omp parallel for reduction(custom_min_double:result)
+        for (int i = 0; i < n_clusters_; ++i) {
+          const auto* centroid_bytes
+              = reinterpret_cast<const unum::usearch::byte_t*>(centroids_.data() + i * dim_);
+          auto dist_sq = static_cast<Scalar>(metric_(emb_bytes, centroid_bytes));
+
+          if (dist_sq < result.dist_sq) {
+            result.dist_sq = dist_sq;
+            result.idx = i;
+          }
+        }
+      } else {
+        // Fallback for other types: use sequential or critical section
+        for (int i = 0; i < n_clusters_; ++i) {
+          const auto* centroid_bytes
+              = reinterpret_cast<const unum::usearch::byte_t*>(centroids_.data() + i * dim_);
+          auto dist_sq = static_cast<Scalar>(metric_(emb_bytes, centroid_bytes));
+
+          if (dist_sq < result.dist_sq) {
+            result.dist_sq = dist_sq;
+            result.idx = i;
+          }
+        }
+      }
+
+      best_dist_sq = result.dist_sq;
+      best_idx = result.idx;
+    } else {
       for (int i = 0; i < n_clusters_; ++i) {
         const auto* centroid_bytes
             = reinterpret_cast<const unum::usearch::byte_t*>(centroids_.data() + i * dim_);
         auto dist_sq = static_cast<Scalar>(metric_(emb_bytes, centroid_bytes));
 
-        if (dist_sq < local_dist_sq) {
-          local_dist_sq = dist_sq;
-          local_idx = i;
-        }
-      }
-
-#    pragma omp critical
-      {
-        if (local_dist_sq < best_dist_sq) {
-          best_dist_sq = local_dist_sq;
-          best_idx = local_idx;
+        if (dist_sq < best_dist_sq) {
+          best_dist_sq = dist_sq;
+          best_idx = i;
         }
       }
     }
