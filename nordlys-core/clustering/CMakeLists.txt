@@ -29,7 +29,7 @@ set(USEARCH_USE_SIMSIMD ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(usearch)
 
 # Clustering library
-add_library(nordlys_clustering STATIC src/cluster.cpp)
+add_library(nordlys_clustering STATIC src/cluster_cpu.cpp src/cluster_factory.cpp)
 add_library(Nordlys::Clustering ALIAS nordlys_clustering)
 
 target_include_directories(nordlys_clustering
@@ -45,7 +45,8 @@ target_include_directories(nordlys_clustering SYSTEM PUBLIC
 target_link_libraries(nordlys_clustering
   PUBLIC
     Nordlys::Common
-    usearch
+  PRIVATE
+    $<BUILD_INTERFACE:usearch>
 )
 
 # CUDA acceleration (optional)
@@ -96,7 +97,7 @@ if(NORDLYS_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
-install(TARGETS nordlys_clustering usearch
+install(TARGETS nordlys_clustering
   EXPORT NordlysTargets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )

@@ -1,8 +1,9 @@
 #ifdef NORDLYS_HAS_CUDA
 
+#  include <climits>
 #  include <cmath>
 #  include <cstring>
-#  include <nordlys/clustering/cluster.hpp>
+#  include <nordlys/clustering/cluster_cuda.hpp>
 #  include <nordlys/clustering/cuda/common.cuh>
 #  include <nordlys/clustering/cuda/distance.cuh>
 #  include <numeric>
@@ -63,7 +64,7 @@ void CudaClusterBackend::free_memory() {
   pipeline_initialized_ = false;
 }
 
- CudaClusterBackend::CudaClusterBackend() {
+CudaClusterBackend::CudaClusterBackend() {
   try {
     NORDLYS_CUDA_CHECK(cudaStreamCreate(&stream_));
     NORDLYS_CUBLAS_CHECK(cublasCreate(&cublas_));
@@ -81,13 +82,13 @@ void CudaClusterBackend::free_memory() {
   }
 }
 
- CudaClusterBackend::~CudaClusterBackend() {
+CudaClusterBackend::~CudaClusterBackend() {
   free_memory();
   if (cublas_) cublasDestroy(cublas_);
   if (stream_) cudaStreamDestroy(stream_);
 }
 
- void CudaClusterBackend::capture_graph() {
+void CudaClusterBackend::capture_graph() {
   if (graph_exec_) {
     cudaGraphExecDestroy(graph_exec_);
     graph_exec_ = nullptr;
@@ -127,21 +128,33 @@ void CudaClusterBackend::free_memory() {
 }
 
 void CudaClusterBackend::load_centroids(const float* data, size_t n_clusters, size_t dim) {
-  if (n_clusters <= 0 || dim <= 0) {
-    throw std::invalid_argument("n_clusters and dim must be positive");
+  if (n_clusters == 0 || dim == 0) {
+    throw std::invalid_argument("load_centroids: n_clusters and dim must be non-zero");
   }
 
-  auto nc = static_cast<size_t>(n_clusters);
-  auto d = static_cast<size_t>(dim);
+  if (n_clusters > static_cast<size_t>(INT_MAX)) {
+    throw std::invalid_argument("load_centroids: n_clusters exceeds INT_MAX");
+  }
 
-  if (nc > SIZE_MAX / d) {
-    throw std::invalid_argument("n_clusters * dim would overflow");
+  if (dim > static_cast<size_t>(INT_MAX)) {
+    throw std::invalid_argument("load_centroids: dim exceeds INT_MAX");
+  }
+
+  if (data == nullptr) {
+    throw std::invalid_argument("load_centroids: data pointer is null");
+  }
+
+  if (n_clusters > SIZE_MAX / dim) {
+    throw std::invalid_argument("load_centroids: n_clusters * dim would overflow");
   }
 
   free_memory();
 
-  n_clusters_ = n_clusters;
-  dim_ = dim;
+  n_clusters_ = static_cast<int>(n_clusters);
+  dim_ = static_cast<int>(dim);
+
+  auto nc = static_cast<size_t>(n_clusters_);
+  auto d = static_cast<size_t>(dim_);
 
   d_centroids_.reset(nc * d);
   d_centroid_norms_.reset(nc);
@@ -173,7 +186,7 @@ std::pair<int, float> CudaClusterBackend::assign(EmbeddingView view) {
   }
 
   if (view.dim != static_cast<size_t>(dim_)) {
-    throw std::invalid_argument("dimension mismatch in assign");
+    throw std::invalid_argument("assign: dimension mismatch");
   }
 
   if (!graph_valid_ || !graph_exec_) {
@@ -182,33 +195,27 @@ std::pair<int, float> CudaClusterBackend::assign(EmbeddingView view) {
 
   return std::visit(
       overloaded{[&](CpuDevice) -> std::pair<int, float> {
-                   // CPU input: copy to GPU (existing path)
                    std::memcpy(h_embedding_.get(), view.data, view.dim * sizeof(float));
                    NORDLYS_CUDA_CHECK(cudaMemcpyAsync(d_embedding_.get(), h_embedding_.get(),
                                                       view.dim * sizeof(float),
                                                       cudaMemcpyHostToDevice, stream_));
 
-                   // Use existing graph (expects data in d_embedding_)
                    NORDLYS_CUDA_CHECK(cudaGraphLaunch(graph_exec_, stream_));
                    NORDLYS_CUDA_CHECK(cudaStreamSynchronize(stream_));
 
                    return {*h_best_idx_.get(), *h_best_dist_.get()};
                  },
                  [&](CudaDevice d) -> std::pair<int, float> {
-                   // GPU input: use pointer directly
-                   // Ensure we're on the correct device
                    int current_device;
                    cudaGetDevice(&current_device);
                    if (current_device != d.id) {
                      NORDLYS_CUDA_CHECK(cudaSetDevice(d.id));
                    }
 
-                   // Copy directly from input GPU pointer to our GPU buffer
                    NORDLYS_CUDA_CHECK(cudaMemcpyAsync(d_embedding_.get(), view.data,
                                                       view.dim * sizeof(float),
                                                       cudaMemcpyDeviceToDevice, stream_));
 
-                   // Use existing graph
                    NORDLYS_CUDA_CHECK(cudaGraphLaunch(graph_exec_, stream_));
                    NORDLYS_CUDA_CHECK(cudaStreamSynchronize(stream_));
 
@@ -247,22 +254,20 @@ void CudaClusterBackend::ensure_stage_capacity(int stage_idx, int count) {
   stage.capacity = new_cap;
 }
 
-std::vector<std::pair<int, float>> CudaClusterBackend::assign_batch(
-    EmbeddingBatchView view) {
+std::vector<std::pair<int, float>> CudaClusterBackend::assign_batch(EmbeddingBatchView view) {
   if (view.count == 0) return {};
   if (view.count == 1) {
     EmbeddingView single_view{view.data, view.dim, view.device};
     return {assign(single_view)};
   }
   if (view.dim != static_cast<size_t>(dim_)) {
-    throw std::invalid_argument("dimension mismatch");
+    throw std::invalid_argument("assign_batch: dimension mismatch");
   }
 
   return std::visit(overloaded{[&](CpuDevice) -> std::vector<std::pair<int, float>> {
                                  return assign_batch_from_host(view);
                                },
                                [&](CudaDevice d) -> std::vector<std::pair<int, float>> {
-                                 // Ensure we're on the correct device
                                  int current_device;
                                  cudaGetDevice(&current_device);
                                  if (current_device != d.id) {
@@ -314,7 +319,6 @@ std::vector<std::pair<int, float>> CudaClusterBackend::assign_batch_from_device(
       }
     }
 
-    // Device-to-device copy
     NORDLYS_CUDA_CHECK(cudaMemcpyAsync(stage.d_queries.get(), src,
                                        this_count * dim_ * sizeof(float), cudaMemcpyDeviceToDevice,
                                        stage.stream));
@@ -432,5 +436,14 @@ std::vector<std::pair<int, float>> CudaClusterBackend::assign_batch_from_host(
   return results;
 }
 
+// =============================================================================
+// CUDA utility function
+// =============================================================================
+
+bool cuda_available() noexcept {
+  int device_count = 0;
+  cudaError_t err = cudaGetDeviceCount(&device_count);
+  return err == cudaSuccess && device_count > 0;
+}
 
 #endif  // NORDLYS_HAS_CUDA
