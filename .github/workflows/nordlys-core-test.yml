@@ -55,8 +55,7 @@ jobs:
             -DNORDLYS_BUILD_PYTHON=ON \
             -DNORDLYS_BUILD_C=ON \
             -DNORDLYS_BUILD_BENCHMARKS=OFF \
-            -DNORDLYS_ENABLE_CUDA=OFF \
-            -DNORDLYS_ENABLE_TRACY=OFF
+            -DNORDLYS_ENABLE_CUDA=OFF
 
       - name: Build
         working-directory: nordlys-core
@@ -101,36 +100,15 @@ jobs:
       - name: Install build tools
         run: uv pip install conan --system
 
-      - name: Install Python test dependencies
-        working-directory: nordlys-core/bindings/python
-        run: uv sync --group test --no-install-project
-
       - name: Setup Conan profile
         run: conan profile detect --force
 
-      - name: Install dependencies
-        working-directory: nordlys-core
-        run: conan install . --build=missing -s compiler.cppstd=20
-
-      - name: Configure
-        working-directory: nordlys-core
-        shell: bash
+      - name: Install package in editable mode with test dependencies
+        working-directory: nordlys-core/bindings/python
         run: |
-          cmake --preset conan-release \
-            -DNORDLYS_BUILD_TESTS=OFF \
-            -DNORDLYS_BUILD_PYTHON=ON \
-            -DNORDLYS_BUILD_C=OFF \
-            -DNORDLYS_BUILD_BENCHMARKS=OFF \
-            -DNORDLYS_ENABLE_CUDA=OFF \
-            -DNORDLYS_ENABLE_TRACY=OFF
-
-      - name: Build Python bindings
-        working-directory: nordlys-core
-        run: cmake --build --preset conan-release --parallel --target nordlys_core_ext
+          uv pip install -e ".[test]" --system
 
       - name: Run Python tests
         working-directory: nordlys-core/bindings/python
-        env:
-          PYTHONPATH: ${{ github.workspace }}/nordlys-core/build/Release
         run: |
-          uv run pytest tests/ -v --tb=short
+          pytest tests/ -v --tb=short

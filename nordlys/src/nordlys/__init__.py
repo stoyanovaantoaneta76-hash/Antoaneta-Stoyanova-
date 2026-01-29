@@ -20,11 +20,11 @@ Usage:
     ...     "anthropic/claude-3-sonnet": [0.88, 0.91, ...],
     ... })
     >>>
-    >>> # Fit and route
-    >>> model = Nordlys(models=models)
-    >>> model.fit(df)
-    >>> result = model.route("Explain quantum computing", cost_bias=0.5)
-    >>> print(f"Selected: {result.model_id}")
+     >>> # Fit and route
+     >>> model = Nordlys(models=models)
+     >>> model.fit(df)
+     >>> result = model.route("Explain quantum computing")
+     >>> print(f"Selected: {result.model_id}")
 """
 
 # ============================================================================
@@ -40,12 +40,11 @@ from nordlys import reduction
 from nordlys import clustering
 
 # C++ Core types
-from nordlys_core_ext import (
+from nordlys_core import (
     NordlysCheckpoint,
     TrainingMetrics,
     EmbeddingConfig,
     ClusteringConfig,
-    RoutingConfig,
     ModelFeatures,
 )
 
@@ -53,7 +52,7 @@ from nordlys_core_ext import (
 # Package metadata
 # ============================================================================
 
-__version__ = "0.1.6"
+__version__ = "0.2.4"
 
 __all__ = [
     # Main API
@@ -65,7 +64,6 @@ __all__ = [
     "TrainingMetrics",
     "EmbeddingConfig",
     "ClusteringConfig",
-    "RoutingConfig",
     "ModelFeatures",
     # Modules
     "reduction",
