@@ -53,61 +53,6 @@ class TestNordlysRoute:
             nordlys.route("Test prompt")
 
 
-class TestRoutingCostBias:
-    """Test cost_bias parameter in routing."""
-
-    def test_route_cost_bias_0_prefers_cheap(self, fitted_nordlys):
-        """Test that cost_bias=0 returns a valid model (smoke test).
-
-        Note: The actual model selection depends on cluster assignments and
-        error rates, so we only verify a valid model is returned. The cost_bias
-        parameter influences the tradeoff but doesn't guarantee the cheapest model.
-        """
-        result = fitted_nordlys.route("What is 2+2?", cost_bias=0.0)
-        # Verify a valid model is returned
-        assert result.model_id in [
-            "openai/gpt-4",
-            "openai/gpt-3.5-turbo",
-            "anthropic/claude-3-sonnet",
-        ]
-
-    def test_route_cost_bias_1_prefers_quality(self, fitted_nordlys):
-        """Test that cost_bias=1 tends toward quality models."""
-        result = fitted_nordlys.route("Explain quantum physics", cost_bias=1.0)
-        # Should return one of the valid models
-        assert result.model_id in [
-            "openai/gpt-4",
-            "openai/gpt-3.5-turbo",
-            "anthropic/claude-3-sonnet",
-        ]
-
-    def test_route_cost_bias_05_balanced(self, fitted_nordlys):
-        """Test that cost_bias=0.5 returns a valid model."""
-        result = fitted_nordlys.route("Test prompt", cost_bias=0.5)
-        assert result.model_id in [
-            "openai/gpt-4",
-            "openai/gpt-3.5-turbo",
-            "anthropic/claude-3-sonnet",
-        ]
-
-    def test_different_cost_bias_may_differ(self, fitted_nordlys):
-        """Test that different cost_bias values may produce different results."""
-        result_0 = fitted_nordlys.route("Explain complex reasoning", cost_bias=0.0)
-        result_1 = fitted_nordlys.route("Explain complex reasoning", cost_bias=1.0)
-
-        # Both should be valid (may or may not be different)
-        assert result_0.model_id in [
-            "openai/gpt-4",
-            "openai/gpt-3.5-turbo",
-            "anthropic/claude-3-sonnet",
-        ]
-        assert result_1.model_id in [
-            "openai/gpt-4",
-            "openai/gpt-3.5-turbo",
-            "anthropic/claude-3-sonnet",
-        ]
-
-
 class TestRoutingAlternatives:
     """Test alternatives in routing results."""
 
@@ -241,3 +186,37 @@ class TestBatchRouting:
         results = fitted_nordlys.route_batch(["Single prompt"])
         assert len(results) == 1
         assert isinstance(results[0], RouteResult)
+
+    def test_route_batch_uses_batch_processing(self, fitted_nordlys):
+        """Test that route_batch processes all prompts in a single batch."""
+        prompts = ["Prompt 1", "Prompt 2", "Prompt 3", "Prompt 4", "Prompt 5"]
+        results = fitted_nordlys.route_batch(prompts)
+
+        # All results should be valid RouteResults
+        assert len(results) == len(prompts)
+        for result in results:
+            assert isinstance(result, RouteResult)
+            assert result.model_id is not None
+            assert result.cluster_id >= 0
+
+    def test_route_batch_with_repeated_prompts(self, fitted_nordlys):
+        """Test that route_batch handles repeated prompts correctly."""
+        prompts = ["Same prompt", "Same prompt", "Different prompt"]
+        results = fitted_nordlys.route_batch(prompts)
+
+        assert len(results) == 3
+        # Same prompts should produce same results
+        assert results[0].model_id == results[1].model_id
+        assert results[0].cluster_id == results[1].cluster_id
+        # Different prompt may or may not match
+        assert isinstance(results[2], RouteResult)
+
+    def test_route_batch_large_batch(self, fitted_nordlys):
+        """Test route_batch with a large batch of prompts."""
+        prompts = [f"Prompt {i}" for i in range(100)]
+        results = fitted_nordlys.route_batch(prompts)
+
+        assert len(results) == 100
+        for result in results:
+            assert isinstance(result, RouteResult)
+            assert result.model_id is not None
